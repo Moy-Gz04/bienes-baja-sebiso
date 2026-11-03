@@ -57,7 +57,7 @@ function responder_(obj) {
 }
 
 function doGet() {
-  return responder_({ ok: true, mensaje: 'Apps Script de fichas activo.', version: 'fichas-2026-11-03' });
+  return responder_({ ok: true, mensaje: 'Apps Script de fichas activo.', version: 'fichas-lotes-2026-11-03' });
 }
 
 function doPost(e) {
@@ -65,6 +65,7 @@ function doPost(e) {
     var d = JSON.parse(e.postData.contents);
     if (!d.clave || d.clave !== props_().getProperty('CLAVE')) return responder_({ ok: false, error: 'Clave incorrecta.' });
     if (d.accion === 'guardar') return responder_(guardar_(d));
+    if (d.accion === 'guardarVarios') return responder_(guardarVarios_(d));
     if (d.accion === 'obtener') return responder_(obtener_(d));
     if (d.accion === 'listar') return responder_(listar_());
     return responder_({ ok: false, error: 'Acción no reconocida: ' + d.accion });
@@ -103,6 +104,46 @@ function guardar_(d) {
     }
     h.getRange(fila, 1, 1, ENCABEZADOS.length).setValues([[inv, nombre, archivo.getId(), archivo.getUrl(), d.origen || '', new Date()]]);
     return { ok: true, no_inventario: inv, id: archivo.getId(), url: archivo.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** { fichas: [{ no_inventario, pdf_base64, origen }] } -> guarda un lote en una sola ejecución.
+ *  Lee la hoja una vez, crea los archivos y escribe todas las filas juntas (mucho más rápido que de una en una). */
+function guardarVarios_(d) {
+  var fichas = d.fichas || [];
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var h = hoja_();
+    var carpeta = DriveApp.getFolderById(CARPETA_ID);
+    var n = h.getLastRow();
+    var filas = n < 2 ? [] : h.getRange(2, 1, n - 1, ENCABEZADOS.length).getValues();
+    var indice = {};
+    for (var i = 0; i < filas.length; i++) indice[String(filas[i][0]).trim()] = i;
+    var resultados = [], ahora = new Date();
+    fichas.forEach(function (f) {
+      var inv = String(f.no_inventario || '').trim();
+      try {
+        if (!/^\d+$/.test(inv) || !f.pdf_base64) throw new Error('Datos incompletos');
+        var nombre = 'Ficha técnica ' + inv + '.pdf';
+        var archivo = carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(f.pdf_base64), 'application/pdf', nombre));
+        var fila = [inv, nombre, archivo.getId(), archivo.getUrl(), f.origen || '', ahora];
+        if (indice.hasOwnProperty(inv)) {
+          var anterior = filas[indice[inv]][2];
+          if (anterior) { try { DriveApp.getFileById(anterior).setTrashed(true); } catch (x) { /* ya no existía */ } }
+          filas[indice[inv]] = fila;
+        } else {
+          indice[inv] = filas.length; filas.push(fila);
+        }
+        resultados.push({ no_inventario: inv, ok: true, id: archivo.getId() });
+      } catch (err) {
+        resultados.push({ no_inventario: inv, ok: false, error: String(err) });
+      }
+    });
+    if (filas.length) h.getRange(2, 1, filas.length, ENCABEZADOS.length).setValues(filas);
+    return { ok: true, resultados: resultados };
   } finally {
     lock.releaseLock();
   }

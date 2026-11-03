@@ -5,12 +5,12 @@ body.con-encabezado-sistemas::before{ display:none; }
 
 /* clasificación: tarjetas que también filtran */
 .b-grupos{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-bottom:10px; }
-.b-grupo{ position:relative; display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:0 8px; padding:9px 12px 8px 15px; border:1.5px solid var(--borde); border-radius:12px; background:#fff; color:var(--txt); text-align:left; cursor:pointer; font-family:'Montserrat',sans-serif; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
+.b-grupo{ position:relative; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:2px; min-width:0; padding:9px 12px 9px 15px; border:1.5px solid var(--borde); border-radius:12px; background:#fff; color:var(--txt); text-align:left; cursor:pointer; font-family:'Montserrat',sans-serif; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
 .b-grupo::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--g); }
 .b-grupo.baja::before{ background:var(--baja); } .b-grupo.reap::before{ background:var(--reap); } .b-grupo.dif::before{ background:var(--dif); } .b-grupo.foto::before{ background:var(--foto); } .b-grupo.pend::before{ background:var(--pend); }
-.b-grupo span{ font-size:11.5px; font-weight:700; color:var(--txt2); }
-.b-grupo b{ font-size:20px; font-weight:800; color:var(--g); font-variant-numeric:tabular-nums; }
-.b-grupo small{ grid-column:1 / -1; font-size:11px; color:var(--txt2); font-variant-numeric:tabular-nums; }
+.b-grupo span{ min-height:2.5em; font-size:11.5px; font-weight:700; line-height:1.25; color:var(--txt2); overflow-wrap:anywhere; }
+.b-grupo b{ font-size:21px; line-height:1.1; font-weight:800; color:var(--g); font-variant-numeric:tabular-nums; }
+.b-grupo small{ font-size:11px; color:var(--txt2); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .b-grupo:hover{ border-color:var(--d); }
 .b-grupo[aria-selected="true"]{ border-color:var(--g); box-shadow:0 0 0 3px rgba(95,33,50,.12); background:var(--suave); }
 .b-grupo:focus-visible{ outline:2px solid var(--g); outline-offset:2px; }
@@ -160,7 +160,8 @@ body.con-encabezado-sistemas::before{ display:none; }
   /* apartados: una tira que se desliza de lado */
   .b-grupos{ display:flex; gap:6px; overflow-x:auto; margin:0 -12px 8px; padding:2px 12px 4px; scrollbar-width:none; }
   .b-grupos::-webkit-scrollbar{ display:none; }
-  .b-grupo{ flex:0 0 auto; padding:7px 11px 6px 13px; grid-template-columns:auto auto; }
+  .b-grupo{ flex:0 0 auto; flex-direction:row; align-items:baseline; gap:8px; padding:7px 11px 7px 13px; }
+  .b-grupo span{ min-height:0; white-space:nowrap; }
   .b-grupo b{ font-size:16px; } .b-grupo small{ display:none; }
   .b-barra{ grid-template-columns:1fr 1fr; gap:6px; }
   .b-barra .tv-buscar{ grid-column:1 / -1; }
@@ -210,7 +211,7 @@ body.solo-captura .b-grupos{ grid-template-columns:repeat(3,minmax(0,1fr)); }
 .b-graf-cuerpo{ flex:1; overflow:auto; padding:14px 16px 18px; font-family:'Montserrat',sans-serif; color:var(--txt); background:var(--suave); }
 .g-cifras{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
 .g-cifras div{ padding:10px 14px; border:1px solid var(--borde); border-radius:12px; background:#fff; }
-.g-cifras b{ display:block; font-size:22px; font-weight:800; color:var(--g); font-variant-numeric:tabular-nums; }
+.g-cifras b{ display:block; font-size:clamp(17px,1.9vw,22px); overflow-wrap:anywhere; font-weight:800; color:var(--g); font-variant-numeric:tabular-nums; }
 .g-cifras span{ font-size:11.5px; color:var(--txt2); }
 .g-rejilla{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .g-caja{ padding:12px 14px; border:1px solid var(--borde); border-radius:12px; background:#fff; min-width:0; }
