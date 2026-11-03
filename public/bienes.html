@@ -1,0 +1,107 @@
+<script>
+if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){ window.location.href = 'index.html'; }
+</script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<link rel="icon" href="favicon.ico">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bienes en propuesta de baja · SEBISO</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="css/ssidebar.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/encabezado-sistemas.css">
+<link rel="stylesheet" href="css/minisebiso-flotante.css">
+<link rel="stylesheet" href="css/asistente-extra.css">
+<link rel="stylesheet" href="css/personal-up.css">
+<link rel="stylesheet" href="css/bienes.css">
+</head>
+<body>
+<div id="sidebar-container"></div>
+<div class="contenido">
+<section class="tv">
+  <header class="tv-cabeza">
+    <div><p class="tv-eyebrow">Padrones de bienes muebles</p><h1>Bienes en propuesta de baja</h1></div>
+    <div class="b-resumen" id="bResumen" aria-live="polite"></div>
+  </header>
+
+  <div class="b-grupos" role="tablist" aria-label="Clasificación" id="bGrupos"></div>
+
+  <div class="b-barra">
+    <label class="tv-buscar"><i class="bi bi-search"></i><input type="search" id="bBuscar" placeholder="Buscar por No. inventario, descripción, marca, serie, adscripción…" aria-label="Buscar"></label>
+    <select id="bEstado" aria-label="Filtrar por estado físico"></select>
+    <select id="bFotos" aria-label="Filtrar por fotos"><option value="">Con y sin fotos</option><option value="si">Con fotos</option><option value="no">Sin fotos</option></select>
+    <select id="bFicha" aria-label="Filtrar por ficha técnica"><option value="">Con y sin ficha previa</option><option value="si">Con ficha previa</option><option value="no">Sin ficha previa</option></select>
+    <select id="bOrden" aria-label="Ordenar"><option value="inv">Orden: No. inventario</option><option value="moi">Orden: mayor M.O.I.</option><option value="fecha">Orden: más antiguos</option></select>
+  </div>
+
+  <div class="tv-tarjeta b-tarjeta">
+    <div class="b-tabla" id="bContenedor"><table id="bTabla">
+      <thead><tr><th class="b-c">Foto</th><th>No. inventario</th><th>Descripción</th><th>Clasificación</th><th class="b-c">Estado</th><th class="b-d">M.O.I.</th><th class="b-c">Ficha</th></tr></thead>
+      <tbody id="bCuerpo"></tbody>
+    </table></div>
+    <div class="b-pie">
+      <b id="bConteo"></b>
+      <div class="b-paginas">
+        <button type="button" class="tv-btn" id="bAnterior"><i class="bi bi-chevron-left"></i> Anterior</button>
+        <span id="bPagina"></span>
+        <button type="button" class="tv-btn" id="bSiguiente">Siguiente <i class="bi bi-chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <dialog class="tv-dialogo b-dialogo" id="bDialogo" aria-labelledby="bTitulo">
+    <form method="dialog">
+      <div class="b-ficha">
+        <figure class="b-galeria">
+          <div class="b-foto"><img id="bFoto" alt=""><span id="bSinFoto">Sin fotos de este bien</span>
+            <button type="button" class="b-flecha b-ant" id="bFotoAnt" aria-label="Foto anterior"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="b-flecha b-sig" id="bFotoSig" aria-label="Foto siguiente"><i class="bi bi-chevron-right"></i></button>
+          </div>
+          <div class="b-miniaturas" id="bMiniaturas"></div>
+        </figure>
+        <div class="b-info">
+          <p class="b-ficha-eti">Ficha técnica</p>
+          <h2 id="bTitulo"></h2>
+          <div class="b-chips" id="bChips"></div>
+          <div class="b-captura" id="bCaptura" hidden>
+            <p id="bCapturaTitulo">Capturar estatus</p>
+            <div class="b-opciones" id="bOpciones">
+              <button type="button" class="baja" data-v="Baja definitiva" aria-pressed="false">Baja definitiva</button>
+              <button type="button" class="reap" data-v="Para reaprovechamiento" aria-pressed="false">Reaprovechamiento</button>
+              <button type="button" class="dif" data-v="Propuesta DIF" aria-pressed="false">Propuesta DIF</button>
+            </div>
+            <div class="b-captura-pie"><span id="bCapturaMsg" role="status"></span><button type="button" class="b-quitar" id="bQuitar" hidden>Regresar a pendiente</button></div>
+          </div>
+          <div id="bDetalle"></div>
+          <div class="tv-dialogo-acc b-acciones">
+            <button type="button" class="tv-btn" id="bAnteriorBien"><i class="bi bi-arrow-left"></i></button>
+            <button type="button" class="tv-btn" id="bSiguienteBien"><i class="bi bi-arrow-right"></i></button>
+            <span class="b-hueco"></span>
+            <a class="tv-btn" id="bDescargar" href="#"><i class="bi bi-download"></i> PDF</a>
+            <button type="button" class="tv-btn" id="bImprimir"><i class="bi bi-file-earmark-pdf"></i> Ver ficha técnica</button>
+            <button class="tv-btn tv-btn-principal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="tv-dialogo b-pdf" id="bPdf" aria-labelledby="bPdfTitulo">
+    <div class="b-pdf-cabeza"><h2 id="bPdfTitulo"></h2>
+      <a class="tv-btn" id="bPdfAbrir" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Abrir aparte</a>
+      <button type="button" class="tv-btn tv-btn-principal" id="bPdfCerrar">Cerrar</button></div>
+    <iframe id="bPdfMarco" title="Ficha técnica en PDF"></iframe>
+  </dialog>
+</section>
+</div>
+<div id="bImpresion" class="b-impresion" aria-hidden="true"></div>
+<script src="js/sidebar.js"></script>
+<script src="js/encabezado-sistemas.js"></script>
+<script src="js/bienes.js"></script>
+<script src="js/minisebiso-flotante.js"></script>
+<script src="js/asistente-extra.js"></script>
+<script src="js/asistente-ventanas.js"></script>
+</body>
+</html>

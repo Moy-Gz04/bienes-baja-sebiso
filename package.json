@@ -1,0 +1,16 @@
+{
+  "name": "bienes-baja",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bienes en propuesta de baja de la Secretaría de Bienestar e Inclusión Social",
+  "scripts": {
+    "build": "node build.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

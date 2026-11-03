@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<link rel="icon" href="favicon.ico">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Bienes en propuesta de baja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link rel="stylesheet" href="css/login-eclipse.css?v=2">
+
+
+
+</head>
+
+<body>
+
+
+<!-- ============ LOGIN (mismo diseño que Contratos: cielo, anillos, tarjeta circular y MiniSEBISO) ============ -->
+<div class="login-eclipse">
+  <div class="login-espacio" aria-hidden="true">
+    <canvas id="login-estrellas"></canvas>
+    <span class="anillo a1"></span><span class="anillo a2"></span><span class="anillo a3"></span>
+    <span class="eclipse"></span>
+  </div>
+
+  <div class="login-wrap">
+    <div class="login-halo"></div>
+
+    <div class="login-card">
+      <div class="login-header">
+        <!-- MiniSEBISO: la mascota del sistema; sus ojos siguen el ratón (js/minisebiso.js) -->
+        <div class="minisebiso" role="button" tabindex="0" aria-label="MiniSEBISO, la mascota de SEBISO. Toca para saludar">
+          <div class="ms-burbuja" aria-live="polite">¡Hola! Soy el asistente virtual de los sistemas C.A.</div>
+          <div class="ms-cuerpo">
+            <span class="ms-ojo-mov izq"><span class="ms-ojo"></span></span>
+            <span class="ms-ojo-mov der"><span class="ms-ojo"></span></span>
+          </div>
+          <div class="ms-estrella"></div>
+        </div>
+        <div class="login-gov">Gobierno del Estado de Hidalgo</div>
+        <div class="login-secretaria">Secretaría de Bienestar e Inclusión Social</div>
+        <div class="login-subsecretaria">Bienes en propuesta de baja</div>
+      </div>
+
+      <div class="login-titulo-bloque">
+        <div class="login-titulo">Acceso al Sistema</div>
+      </div>
+
+      <div class="login-body">
+        <div class="campo-grupo">
+          <label class="campo-label" for="usuario">Usuario</label>
+          <div class="campo-input-wrap">
+            <i class="ti ti-user icono-campo"></i>
+            <input class="campo-input" id="usuario" type="text" name="username" autocomplete="username" placeholder="Tu usuario" spellcheck="false">
+          </div>
+        </div>
+
+        <div class="campo-grupo">
+          <label class="campo-label" for="password">Contraseña</label>
+          <div class="campo-input-wrap">
+            <i class="ti ti-lock icono-campo"></i>
+            <input class="campo-input" id="password" type="password" autocomplete="current-password" placeholder="••••••••" name="current-password">
+            <button type="button" class="btn-ver-pass" id="togglePasswordIcon" onclick="togglePassword()" title="Mostrar contraseña" tabindex="-1"><i class="ti ti-eye icono-ojo-abierto"></i><i class="ti ti-eye-off icono-ojo-cerrado" style="display:none;"></i></button>
+          </div>
+        </div>
+
+        <div class="fila-recordarme">
+          <label class="neu-toggle">
+            <input type="checkbox" id="chk-recordar">
+            <span class="neu-toggle-track"><span class="neu-toggle-thumb"></span></span>
+            <span class="neu-toggle-label">Recordarme</span>
+          </label>
+        </div>
+
+        <div class="error-msg error-vacio" id="error"></div>
+
+        <button type="button" id="btn-login" onclick="iniciarSesion()" class="btn-login">
+          <span class="spinner"></span>
+          <i class="ti ti-login btn-icono"></i>
+          <span class="btn-texto">Ingresar al Sistema</span>
+        </button>
+
+        <div class="login-pie">
+          Sistema de uso exclusivo para personal autorizado de la Secretaría.<br>
+          SEBISO © 2026 — Gobierno del Estado de Hidalgo
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/login.js"></script>
+<script src="js/login-espacio.js"></script>
+<script src="js/minisebiso.js"></script>
+<script>
+  // Botón con indicador de carga y "Recordarme" (solo el usuario, nunca la contraseña)
+  const chkRecordar = document.getElementById('chk-recordar');
+  const recordado = localStorage.getItem('wg_usuario_recordado');
+  if (recordado) { document.getElementById('usuario').value = recordado; chkRecordar.checked = true; }
+  async function iniciarSesion() {
+    const btn = document.getElementById('btn-login');
+    const u = document.getElementById('usuario').value.trim();
+    if (chkRecordar.checked && u) localStorage.setItem('wg_usuario_recordado', u);
+    else if (!chkRecordar.checked) localStorage.removeItem('wg_usuario_recordado');
+    btn.classList.add('cargando'); btn.disabled = true;
+    try { await login(); } finally { btn.classList.remove('cargando'); btn.disabled = false; }
+  }
+</script>
+
+</body>
+</html>

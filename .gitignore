@@ -1,0 +1,14 @@
+.env
+.netlify
+Contraseñas.txt
+data/
+data/estatus.json
+data/pdfs-prueba.json
+data/usuarios.json
+fichas_xlsx
+netlify/functions/datos.json
+node_modules
+public/f
+public/p
+public/q
+servidor/node_modules

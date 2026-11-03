@@ -1,0 +1,164 @@
+// API del Sistema de Bienes en propuesta de baja (Render). Datos en Neon; PDF de las fichas en Drive (Apps Script).
+// El front vive en Netlify y le pasa /api/* a este servidor (netlify.toml), así que todo es mismo origen.
+// Variables de entorno: DATABASE_URL, JWT_SECRET, APPS_SCRIPT_FICHAS_URL, APPS_SCRIPT_FICHAS_CLAVE, PORT
+// En local, si existe ../public, también sirve el front (node server.js -> http://localhost:4310).
+const fs = require("fs");
+const path = require("path");
+const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { neon } = require("@neondatabase/serverless");
+
+// En local lee el .env del proyecto; en Render las variables vienen del panel
+const ENV_LOCAL = path.join(__dirname, "..", ".env");
+if (fs.existsSync(ENV_LOCAL)) {
+  for (const l of fs.readFileSync(ENV_LOCAL, "utf8").split(/\r?\n/)) {
+    const i = l.indexOf("=");
+    if (i > 0 && !process.env[l.slice(0, i)]) process.env[l.slice(0, i)] = l.slice(i + 1).trim();
+  }
+}
+for (const k of ["DATABASE_URL", "JWT_SECRET"]) if (!process.env[k]) { console.error(`Falta la variable ${k}`); process.exit(1); }
+
+const sql = neon(process.env.DATABASE_URL);
+const SECRETO = process.env.JWT_SECRET;
+const ESTATUS_VALIDOS = ["Baja definitiva", "Para reaprovechamiento", "Propuesta DIF"];
+
+const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "100kb" }));
+app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+
+const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
+
+app.get("/api/salud", (req, res) => res.json({ ok: true }));
+
+// ── Inicio de sesión (con freno a intentos repetidos por IP)
+const intentos = new Map();
+app.post("/api/auth/login", async (req, res) => {
+  const ip = req.ip, ahora = Date.now();
+  const reg = (intentos.get(ip) || []).filter(t => ahora - t < 15 * 60000);
+  if (reg.length >= 10) return res.status(429).json({ error: "Demasiados intentos. Espera unos minutos." });
+  try {
+    const usuario = String(req.body?.usuario || "").trim();
+    const [u] = await sql`SELECT id, usuario, password_hash, area FROM usuarios WHERE usuario = ${usuario}`;
+    if (!u || !bcrypt.compareSync(String(req.body?.password || ""), u.password_hash)) {
+      intentos.set(ip, [...reg, ahora]);
+      return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+    }
+    intentos.delete(ip);
+    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area }, SECRETO, { expiresIn: "8h" }), area: u.area });
+  } catch (e) { fallo(res, e, "No se pudo iniciar sesión."); }
+});
+
+function sesion(req, res, next) {
+  try {
+    req.usuario = jwt.verify(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""), SECRETO);
+    if (req.usuario.proposito) throw new Error("token de otro tipo");
+    next();
+  } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
+}
+
+// ── Bienes con sus fotos y el estatus capturado
+app.get("/api/bienes", sesion, async (req, res) => {
+  try {
+    const filas = await sql`
+      SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, to_char(b.revisado_en, 'YYYY-MM-DD') AS revisado_en,
+        COALESCE((SELECT array_agg(f.ruta ORDER BY f.orden) FROM fotos f WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
+        e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en
+      FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario)
+      ORDER BY length(b.no_inventario), b.no_inventario`;
+    const bienes = filas.map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, ...b }) => ({
+      ...b, "revisó": reviso, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
+      tiene_pdf: !!(pdf_drive_id || pdf),
+      clasificacion: capturado || b.clasificacion,
+      estatus_capturado: capturado ? { clasificacion: capturado, quien: capturo, cuando: new Date(capturado_en).toISOString() } : null,
+    }));
+    res.json({ ok: true, bienes });
+  } catch (e) { fallo(res, e, "No se pudieron cargar los bienes."); }
+});
+
+// ── Captura del estatus de un bien "Pendiente de estatus" (null = regresarlo a pendiente)
+app.post("/api/estatus", sesion, async (req, res) => {
+  try {
+    const inv = String(req.body?.no_inventario || "");
+    const [b] = await sql`SELECT pendiente FROM bienes WHERE no_inventario = ${inv}`;
+    if (!b || !b.pendiente) return res.status(400).json({ ok: false, mensaje: "Ese bien no está pendiente de estatus." });
+    const valor = req.body?.clasificacion;
+    if (valor === null) {
+      await sql`DELETE FROM estatus_capturas WHERE no_inventario = ${inv}`;
+      return res.json({ ok: true, estatus: null });
+    }
+    if (!ESTATUS_VALIDOS.includes(valor)) return res.status(400).json({ ok: false, mensaje: "Elige Baja definitiva, Reaprovechamiento o Propuesta DIF." });
+    const [e] = await sql`INSERT INTO estatus_capturas (no_inventario, clasificacion, quien) VALUES (${inv}, ${valor}, ${req.usuario.usuario || "—"})
+      ON CONFLICT (no_inventario) DO UPDATE SET clasificacion = EXCLUDED.clasificacion, quien = EXCLUDED.quien, cuando = now()
+      RETURNING clasificacion, quien, cuando`;
+    res.json({ ok: true, estatus: { ...e, cuando: new Date(e.cuando).toISOString() } });
+  } catch (e) { fallo(res, e, "No se pudo guardar el estatus."); }
+});
+
+// ── Ficha técnica en PDF. Paso 1 (con sesión): un enlace que dura 5 min. Paso 2: el PDF, pedido a Drive y guardado un rato en memoria.
+app.get("/api/ficha/:inv/enlace", sesion, (req, res) => {
+  const inv = String(req.params.inv).replace(/\D/g, "");
+  res.json({ ok: true, url: `/api/ficha/${inv}/pdf?t=${jwt.sign({ proposito: "ficha", inv }, SECRETO, { expiresIn: "5m" })}` });
+});
+
+const cachePdf = new Map();   // inv -> { bytes, hasta }
+async function pdfDeDrive(inv) {
+  const c = cachePdf.get(inv);
+  if (c && c.hasta > Date.now()) return c.bytes;
+  if (!process.env.APPS_SCRIPT_FICHAS_URL) throw new Error("Falta APPS_SCRIPT_FICHAS_URL");
+  let ultimo;
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      const r = await fetch(process.env.APPS_SCRIPT_FICHAS_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" }, redirect: "follow", signal: AbortSignal.timeout(40000),
+        body: JSON.stringify({ accion: "obtener", no_inventario: inv, clave: process.env.APPS_SCRIPT_FICHAS_CLAVE }),
+      });
+      const d = await r.json();   // Apps Script a veces responde una página de error HTML: se reintenta
+      if (!d.ok) { const e = new Error(d.error || "Drive no devolvió la ficha"); e.definitivo = /no tiene ficha/.test(d.error || ""); throw e; }
+      const bytes = Buffer.from(d.pdf_base64, "base64");
+      if (cachePdf.size > 150) cachePdf.delete(cachePdf.keys().next().value);
+      cachePdf.set(inv, { bytes, hasta: Date.now() + 30 * 60000 });
+      return bytes;
+    } catch (e) {
+      ultimo = e;
+      if (e.definitivo) break;
+      await new Promise(r => setTimeout(r, 1200 * intento));
+    }
+  }
+  throw ultimo;
+}
+
+app.get("/api/ficha/:inv/pdf", async (req, res) => {
+  let t;
+  try { t = jwt.verify(String(req.query.t || ""), SECRETO); } catch (e) { return res.status(401).send("El enlace de la ficha venció. Vuelve a abrirla desde el sistema."); }
+  if (t.proposito !== "ficha" || t.inv !== req.params.inv) return res.status(401).send("Enlace no válido.");
+  const enviar = (bytes) => {
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="Ficha tecnica ${t.inv}.pdf"`, "Cache-Control": "private, max-age=300" });
+    res.send(bytes);
+  };
+  try {
+    enviar(await pdfDeDrive(t.inv));
+  } catch (e) {
+    // En local, mientras se suben a Drive: el PDF generado en public/p o public/q
+    if (fs.existsSync(FRONT)) {
+      const [b] = await sql`SELECT pdf FROM bienes WHERE no_inventario = ${t.inv}`.catch(() => []);
+      const local = b && b.pdf && path.join(FRONT, b.pdf);
+      if (local && fs.existsSync(local)) return enviar(fs.readFileSync(local));
+    }
+    console.error("Ficha", t.inv, e.message);
+    res.status(e.definitivo ? 404 : 502).send(e.definitivo ? "Este bien todavía no tiene su ficha técnica en Drive." : "Drive no respondió. Intenta de nuevo en unos segundos.");
+  }
+});
+
+// El asistente guarda su apariencia en el navegador; aquí solo se responde para que no marque error
+app.all("/api/auth/preferencias", (req, res) => res.json({}));
+app.use("/api", (req, res) => res.status(404).json({ ok: false, mensaje: "Ruta no encontrada" }));
+
+// Solo en local: el front
+const FRONT = path.join(__dirname, "..", "public");
+if (fs.existsSync(FRONT)) app.use(express.static(FRONT));
+
+const PUERTO = process.env.PORT || 4310;
+app.listen(PUERTO, () => console.log(`Bienes en http://localhost:${PUERTO}`));

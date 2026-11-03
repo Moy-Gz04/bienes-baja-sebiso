@@ -1,0 +1,136 @@
+/* =========================================================
+   Encabezado y menú iguales a los de Correspondencia y Programas
+   (medidas, colores y efectos). Lo arma js/encabezado-sistemas.js.
+   ========================================================= */
+
+/* La barra de antes queda oculta (sus botones siguen funcionando por detrás) */
+#sidebar-container .sidebar.hs-oculta { display: none !important; }
+body.con-encabezado-sistemas .contenido { margin-top: 0 !important; min-height: auto; }
+
+.hs-encabezado {
+  position: sticky; top: 0; z-index: 1000; background: #fff;
+  box-shadow: 0 2px 14px rgba(95, 33, 50, .10); font-family: 'Montserrat', sans-serif;
+}
+.hs-encabezado::before {
+  content: ''; display: block; height: 4px;
+  background: linear-gradient(90deg, #5F2132 0 33%, #A9824C 33% 66%, #3D1420 66% 100%);
+}
+.hs-encabezado button { width: auto !important; margin: 0 !important; font-family: inherit; }
+
+.hs-banda {
+  width: 90%; max-width: 1800px; margin: 0 auto; padding: 16px 24px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap; border-bottom: 1px solid #E4D6C8;
+}
+.hs-marca { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.hs-logo { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
+.hs-marca-texto { display: flex; flex-direction: column; gap: 3px; line-height: 1.18; min-width: 0; }
+.hs-gobierno {
+  display: flex; align-items: center; gap: 7px;
+  font-size: .68rem; font-weight: 600; letter-spacing: .16em; color: #7C5D31; text-transform: uppercase;
+}
+.hs-gobierno::before { content: ''; width: 16px; height: 2px; background: #A9824C; border-radius: 2px; flex-shrink: 0; }
+.hs-secretaria { font-size: 1.5rem; font-weight: 700; color: #3D1420; letter-spacing: -.01em; }
+
+.hs-derecha {
+  margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 6px 8px 18px; border-left: 1px solid #E4D6C8;
+}
+.hs-fecha { font-size: .78rem; color: #6B5563; }
+
+/* Cerrar sesión: guinda con brillo que cruza y se eleva al pasar el mouse */
+.hs-salir {
+  position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 22px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  font-size: .8rem; font-weight: 600; letter-spacing: .04em; color: #fff;
+  background: linear-gradient(135deg, #5F2132 0%, #3D1420 100%); border: 1px solid rgba(200, 169, 81, .45);
+  box-shadow: 0 2px 6px rgba(95, 33, 50, .22), 0 8px 18px rgba(95, 33, 50, .14), inset 0 1px 0 rgba(255, 255, 255, .14);
+  transition: filter .18s, box-shadow .22s, transform .18s;
+}
+.hs-salir i { color: #F6EEDD; font-size: 15px; }
+.hs-salir::before {
+  content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, .35), transparent); transform: skewX(-20deg); transition: left .5s ease;
+}
+.hs-salir:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(95, 33, 50, .28), 0 12px 26px rgba(95, 33, 50, .20), inset 0 1px 0 rgba(255, 255, 255, .18); }
+.hs-salir:hover::before { left: 130%; }
+.hs-salir:active { transform: translateY(0); }
+.hs-salir:focus-visible, .hs-menu-item:focus-visible { outline: 2px solid #D8B866; outline-offset: 2px; }
+
+/* Menú: degradado guinda, línea dorada, «MENÚ» con divisor y pestañas tipo píldora */
+.hs-menu {
+  display: flex; align-items: center; gap: 32px; min-height: 52px; box-sizing: border-box;
+  padding: 0 max(24px, calc((100% - min(90%, 1800px)) / 2 + 24px));
+  background: linear-gradient(135deg, #5F2132 0%, #3D1420 100%); border-bottom: 3px solid #A9824C;
+  box-shadow: 0 2px 12px rgba(95, 33, 50, .18);
+}
+.hs-menu-label {
+  font-size: 1.1rem; font-weight: 700; color: #A9824C; letter-spacing: .08em; text-transform: uppercase;
+  border-right: 1px solid rgba(200, 169, 81, .35); padding-right: 24px;
+}
+.hs-menu-items { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 0; }
+.hs-menu-item {
+  padding: 8px 20px; border: 0; border-radius: 999px; cursor: pointer; background: transparent;
+  font-size: .82rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: rgba(255, 255, 255, .8);
+  transition: background .18s, color .18s, transform .12s, box-shadow .18s;
+}
+.hs-menu-item:hover { background: rgba(255, 255, 255, .14); color: #fff; transform: translateY(-1px); }
+.hs-menu-item.activo {
+  background: linear-gradient(135deg, #A9824C 0%, #7C5D31 100%); color: #3D1420; font-weight: 700;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+
+/* Usuario en sesión: fijo en la esquina inferior izquierda (la derecha es de la mascota) */
+.hs-usuario {
+  position: fixed; left: 18px; bottom: 18px; z-index: 880; display: inline-flex; align-items: center; gap: 8px;
+  background: #f9f0f3; border: 1px solid #E4D6C8; padding: 6px 14px 6px 6px; border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(60, 10, 25, .18), 0 0 0 1px rgba(188, 149, 92, .35);
+  font: 700 .85rem 'Montserrat', sans-serif; color: #5F2132;
+}
+.hs-avatar {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 14px;
+  background: linear-gradient(135deg, #A9824C 0%, #7C5D31 100%); box-shadow: 0 2px 5px rgba(124, 93, 49, .35);
+}
+
+/* Píldora del asistente junto a «Cerrar sesión» (la agrega asistente-extra.js) */
+.hs-derecha .nav-asis-grupo { margin-right: 0; }
+
+@media (max-width: 760px) {
+  .hs-banda { width: 100%; padding: 12px 16px; }
+  .hs-secretaria { font-size: 1.05rem; }
+  .hs-derecha { border-left: none; padding-left: 0; margin-left: 0; }
+  .hs-fecha { display: none; }
+  .hs-menu { gap: 14px; padding: 0 16px; }
+  .hs-menu-label { font-size: .9rem; padding-right: 12px; }
+  .hs-usuario { left: 12px; bottom: 12px; }
+}
+@media print { .hs-encabezado, .hs-usuario { display: none; } }
+@media (prefers-reduced-motion: reduce) { .hs-salir, .hs-salir::before, .hs-menu-item { transition: none; } }
+
+/* El título de cada página ya no va en una franja aparte: el nombre de la UP va en el menú, a la derecha */
+.contenido .topbar.hs-oculta { display: none !important; }
+.hs-menu-up {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 46%;
+  padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(200, 169, 81, .35); background: rgba(255, 255, 255, .06);
+  color: #E9D3A6; font-size: .74rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+}
+.hs-menu-up i { color: #A9824C; font-size: 15px; flex-shrink: 0; }
+.hs-menu-up span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .hs-menu-up { max-width: 100%; margin: 0 0 8px; } .hs-menu { flex-wrap: wrap; } }
+body.con-encabezado-sistemas .contenido { padding-top: 14px; }
+
+/* Nombre de la UP: texto suelto (sin botón ni ícono), plateado con un brillo que lo recorre */
+.hs-menu-up { padding: 0; border: 0; border-radius: 0; background: none; font-size: .8rem; font-weight: 700; letter-spacing: .08em; }
+.hs-menu-up span {
+  background: linear-gradient(100deg, #9EA3AD 0%, #E9ECF1 22%, #FFFFFF 30%, #B9BEC7 42%, #8D929C 60%, #DDE1E7 80%, #A7ACB5 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .35)); animation: hsPlata 4.5s linear infinite;
+}
+@keyframes hsPlata { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { .hs-menu-up span { animation: none; } }
+
+/* Desde el primer instante (esta hoja va en el <head>): ni la barra ni la franja de antes se alcanzan a ver */
+#sidebar-container .sidebar { display: none !important; }
+.contenido .topbar { display: none !important; }
+.contenido { margin-top: 0 !important; }
+
+body.con-encabezado-sistemas { position: relative; isolation: isolate; }

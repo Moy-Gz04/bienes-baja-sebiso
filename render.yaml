@@ -1,0 +1,18 @@
+# Servidor del Sistema de Bienes en Render (carpeta servidor/). Las claves se ponen en el panel de Render.
+services:
+  - type: web
+    name: bienes-baja-sebiso
+    runtime: node
+    rootDir: servidor
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/salud
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: APPS_SCRIPT_FICHAS_URL
+        sync: false
+      - key: APPS_SCRIPT_FICHAS_CLAVE
+        sync: false

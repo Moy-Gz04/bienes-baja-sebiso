@@ -1,0 +1,15 @@
+# Front en Netlify (solo la carpeta public, sin los PDF: esos viven en Drive).
+# /api/* se reenvía al servidor de Render, así el front y la API quedan en el mismo dominio.
+[build]
+  publish = "public"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://RENDER_URL/api/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/f/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, immutable"
