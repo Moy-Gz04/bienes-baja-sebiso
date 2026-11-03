@@ -50,6 +50,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   </div>
 
   <dialog class="tv-dialogo b-dialogo" id="bDialogo" aria-labelledby="bTitulo">
+    <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
     <form method="dialog">
       <div class="b-ficha">
         <figure class="b-galeria">
@@ -97,6 +98,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   </dialog>
 
   <dialog class="tv-dialogo b-graf" id="bGraf" aria-labelledby="bGrafTitulo">
+    <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
     <div class="b-pdf-cabeza"><h2 id="bGrafTitulo">Resumen de bienes en propuesta de baja</h2>
       <button type="button" class="tv-btn tv-btn-principal" id="bGrafCerrar">Cerrar</button></div>
     <div class="b-graf-cuerpo" id="bGrafCuerpo"></div>
@@ -104,6 +106,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   </dialog>
 
   <dialog class="tv-dialogo b-pdf" id="bPdf" aria-labelledby="bPdfTitulo">
+    <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
     <div class="b-pdf-cabeza"><h2 id="bPdfTitulo"></h2>
       <a class="tv-btn" id="bPdfAbrir" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Abrir aparte</a>
       <button type="button" class="tv-btn tv-btn-principal" id="bPdfCerrar">Cerrar</button></div>

@@ -153,20 +153,51 @@ function verFicha(inv) {
   const i = estado.vista.indexOf(b);
   $("bAnteriorBien").disabled = i <= 0; $("bSiguienteBien").disabled = i < 0 || i >= estado.vista.length - 1;
   mostrarFoto(); pintarCaptura();
-  if (!$("bDialogo").open) $("bDialogo").showModal();
+  if (!$("bDialogo").open) abrir($("bDialogo"));
 }
 
 // La ficha técnica oficial se ve en PDF dentro del sistema
+// ── Ventanas: en el celular el botón Atrás cierra la ventana de arriba (no saca del sistema),
+// el fondo no se mueve detrás y tocar fuera de la ventana también la cierra.
+const pila = [];
+function abrir(dlg) {
+  if (dlg.open) return;
+  dlg.showModal();
+  pila.push(dlg);
+  document.documentElement.classList.add("con-ventana");
+  history.pushState({ ventana: dlg.id }, "");
+}
+function cerrar(dlg, desdeAtras = false) {
+  if (!dlg.open) return;
+  dlg.close();
+}
+function alCerrar(dlg) {
+  const i = pila.indexOf(dlg);
+  if (i < 0) return;
+  pila.splice(i, 1);
+  if (!pila.length) document.documentElement.classList.remove("con-ventana");
+  if (dlg.id === "bPdf") $("bPdfMarco").removeAttribute("src");   // suelta el PDF (en iPhone se queda pegado)
+  if (!dlg._porAtras && history.state && history.state.ventana === dlg.id) history.back();
+  dlg._porAtras = false;
+}
+window.addEventListener("popstate", () => {
+  const arriba = pila[pila.length - 1];
+  if (arriba) { arriba._porAtras = true; arriba.close(); }
+});
+
 // El PDF vive en Drive: el servidor da un enlace que dura unos minutos y lo entrega
 async function enlacePdf(b) {
   const r = await fetch(`/api/ficha/${encodeURIComponent(b.no_inventario)}/enlace`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
   if (r.status === 401) { location.href = "index.html"; return null; }
   return (await r.json()).url;
 }
+const esMovil = () => matchMedia("(pointer: coarse)").matches && window.innerWidth <= 900;
 async function verPdf(b) {
+  // en el celular el visor dentro de la página falla (sobre todo en iPhone): se abre aparte
+  if (esMovil()) { const pesta = window.open("", "_blank"); const url = await enlacePdf(b); if (url && pesta) pesta.location = url; else if (url) location.href = url; return; }
   $("bPdfTitulo").textContent = `Ficha técnica · ${b.no_inventario}`;
   $("bPdfMarco").removeAttribute("src");
-  $("bPdf").showModal();
+  abrir($("bPdf"));
   const url = await enlacePdf(b);
   if (url) { $("bPdfMarco").src = url; $("bPdfAbrir").href = url; }
 }
@@ -271,8 +302,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("bFoto").addEventListener("click", () => window.open($("bFoto").src, "_blank"));
   $("bImprimir").addEventListener("click", () => verPdf(estado.abierto));
   $("bGraficas").hidden = SOLO_CAPTURA;
-  $("bGraficas").addEventListener("click", () => { pintarGraficas(); $("bGraf").showModal(); });
-  $("bGrafCerrar").addEventListener("click", () => $("bGraf").close());
+  $("bGraficas").addEventListener("click", () => { pintarGraficas(); abrir($("bGraf")); });
+  $("bGrafCerrar").addEventListener("click", () => cerrar($("bGraf")));
   // recuadro con el detalle al pasar el cursor o tocar una barra
   const tip = $("bTip");
   const mostrarTip = (fila, x, y) => {
@@ -285,7 +316,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("bGrafCuerpo").addEventListener("pointerleave", () => { tip.hidden = true; });
   $("bGrafCuerpo").addEventListener("focusin", (e) => { const f = e.target.closest(".g-fila"); if (f) { const r = f.getBoundingClientRect(); mostrarTip(f, r.left + r.width / 2, r.top); } });
   $("bGrafCuerpo").addEventListener("focusout", () => { tip.hidden = true; });
-  $("bPdfCerrar").addEventListener("click", () => $("bPdf").close());
+  $("bPdfCerrar").addEventListener("click", () => cerrar($("bPdf")));
+  document.querySelectorAll("dialog").forEach(dlg => {
+    dlg.addEventListener("close", () => alCerrar(dlg));
+    // tocar el fondo oscuro (fuera de la caja) cierra
+    dlg.addEventListener("click", (e) => {
+      if (e.target !== dlg) return;
+      const r = dlg.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) cerrar(dlg);
+    });
+    dlg.querySelectorAll("[data-cerrar]").forEach(x => x.addEventListener("click", () => cerrar(dlg)));
+  });
   $("bCapCasillas").addEventListener("change", async (e) => {
     const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";
     if (!archivo) return;
