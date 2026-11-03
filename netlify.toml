@@ -5,7 +5,7 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://RENDER_URL/api/:splat"
+  to = "https://bienes-baja-sebiso.onrender.com/api/:splat"
   status = 200
   force = true
 

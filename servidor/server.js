@@ -26,8 +26,16 @@ const ESTATUS_VALIDOS = ["Baja definitiva", "Para reaprovechamiento", "Propuesta
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
-app.use(express.json({ limit: "100kb" }));
+// las fotos capturadas desde el celular llegan en un cuerpo grande; lo demás, pequeño
+const jsonChico = express.json({ limit: "100kb" }), jsonFotos = express.json({ limit: "15mb" });
+app.use((req, res, next) => (/^\/api\/bienes\/[^/]+\/fotos$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+
+// Fotos tomadas en el sistema para los bienes que no tenían (3 por bien), guardadas en Neon
+sql`CREATE TABLE IF NOT EXISTS fotos_capturadas (
+  no_inventario TEXT NOT NULL REFERENCES bienes ON DELETE CASCADE, orden INT NOT NULL CHECK (orden BETWEEN 1 AND 3),
+  imagen BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (no_inventario, orden))`
+  .catch(e => console.error("No se pudo preparar fotos_capturadas:", e.message));
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
@@ -65,11 +73,18 @@ app.get("/api/bienes", sesion, async (req, res) => {
     const filas = await sql`
       SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, to_char(b.revisado_en, 'YYYY-MM-DD') AS revisado_en,
         COALESCE((SELECT array_agg(f.ruta ORDER BY f.orden) FROM fotos f WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
-        e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en
+        e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en,
+        (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
+        (SELECT max(c.quien || '|' || to_char(c.cuando, 'YYYY-MM-DD')) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario) AS foto_captura
       FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario)
       ORDER BY length(b.no_inventario), b.no_inventario`;
-    const bienes = filas.map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, ...b }) => ({
-      ...b, "revisó": reviso, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    const bienes = filas.map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, n_capturadas, foto_captura, ...b }) => ({
+      ...b, "revisó": reviso,
+      // sin fotos de origen: se usan las tomadas en el sistema
+      fotos: b.fotos.length ? b.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
+      fotos_capturadas: !b.fotos.length && n_capturadas > 0 ? { quien: foto_captura.split("|")[0], cuando: foto_captura.split("|")[1] } : null,
+      puede_capturar_fotos: !b.fotos.length, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
       tiene_pdf: !!(pdf_drive_id || pdf),
       clasificacion: capturado || b.clasificacion,
       estatus_capturado: capturado ? { clasificacion: capturado, quien: capturo, cuando: new Date(capturado_en).toISOString() } : null,
@@ -95,6 +110,36 @@ app.post("/api/estatus", sesion, async (req, res) => {
       RETURNING clasificacion, quien, cuando`;
     res.json({ ok: true, estatus: { ...e, cuando: new Date(e.cuando).toISOString() } });
   } catch (e) { fallo(res, e, "No se pudo guardar el estatus."); }
+});
+
+// ── Captura de las 3 fotos de un bien que no tenía (desde el celular). Se pueden volver a tomar.
+app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
+  try {
+    const inv = String(req.params.inv);
+    const [b] = await sql`SELECT (SELECT count(*) FROM fotos f WHERE f.no_inventario = b.no_inventario)::int AS n FROM bienes b WHERE no_inventario = ${inv}`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: "Ese bien no existe." });
+    if (b.n > 0) return res.status(409).json({ ok: false, mensaje: "Este bien ya tiene fotos." });
+    const fotos = Array.isArray(req.body?.fotos) ? req.body.fotos : [];
+    if (fotos.length !== 3) return res.status(400).json({ ok: false, mensaje: "Se necesitan las 3 fotos." });
+    const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });
+    if (bytes.some(x => !x || x.length < 2000 || x.length > 4 * 1024 * 1024 || x[0] !== 0xff || x[1] !== 0xd8)) {
+      return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida. Vuelve a tomarla." });
+    }
+    const quien = req.usuario.usuario || "—";
+    await sql.transaction(bytes.map((x, i) => sql`INSERT INTO fotos_capturadas (no_inventario, orden, imagen, quien) VALUES (${inv}, ${i + 1}, ${x}, ${quien})
+      ON CONFLICT (no_inventario, orden) DO UPDATE SET imagen = EXCLUDED.imagen, quien = EXCLUDED.quien, cuando = now()`));
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, fotos: [1, 2, 3].map(i => `api/foto/${inv}/${i}?t=${tf}&v=${Date.now()}`), fotos_capturadas: { quien, cuando: new Date().toISOString().slice(0, 10) } });
+  } catch (e) { fallo(res, e, "No se pudieron guardar las fotos."); }
+});
+
+app.get("/api/foto/:inv/:orden", async (req, res) => {
+  try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
+  try {
+    const [f] = await sql`SELECT imagen FROM fotos_capturadas WHERE no_inventario = ${String(req.params.inv)} AND orden = ${Number(req.params.orden) || 0}`;
+    if (!f) return res.status(404).end();
+    res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.imagen));
+  } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
 });
 
 // ── Ficha técnica en PDF. Paso 1 (con sesión): un enlace que dura 5 min. Paso 2: el PDF, pedido a Drive y guardado un rato en memoria.

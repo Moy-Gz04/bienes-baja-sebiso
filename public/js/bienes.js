@@ -2,7 +2,7 @@ let BIENES = [];
 const estado = { pagina: 1, grupo: "", abierto: null, foto: 0, vista: [] };
 const GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
-  ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"],
+  ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"], ["__sinfotos", "Sin fotos"],
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -11,13 +11,14 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
 
 function filtrados() {
   const terminos = norm($("bBuscar").value).split(/\s+/).filter(Boolean);
   const est = $("bEstado").value, fotos = $("bFotos").value, ficha = $("bFicha").value;
-  const lista = BIENES.filter(b => (!estado.grupo || b.clasificacion === estado.grupo) && (!est || estadoDe(b) === est)
+  const enGrupo = (b) => !estado.grupo || (estado.grupo === "__sinfotos" ? !b.fotos.length : b.clasificacion === estado.grupo);
+  const lista = BIENES.filter(b => enGrupo(b) && (!est || estadoDe(b) === est)
     && (!fotos || (fotos === "si") === b.fotos.length > 0) && (!ficha || (ficha === "si") === !!b.ficha) && terminos.every(t => b.indice.includes(t)));
   const o = $("bOrden").value;
   if (o === "moi") lista.sort((a, b) => (b.moi || 0) - (a.moi || 0));
@@ -28,12 +29,13 @@ function filtrados() {
 // Sin barras deslizantes: en cada página caben las filas que permite la ventana
 function filasPorPagina() {
   const arriba = $("bContenedor").getBoundingClientRect().top;
-  return Math.max(4, Math.floor((window.innerHeight - arriba - 34 - 58) / 53));
+  const movil = window.innerWidth <= 900;
+  return Math.max(4, Math.floor((window.innerHeight - arriba - (movil ? 0 : 34) - 58) / (movil ? 92 : 53)));
 }
 
 function pintarGrupos() {
   $("bGrupos").innerHTML = GRUPOS.map(([v, t]) => {
-    const l = v ? BIENES.filter(b => b.clasificacion === v) : BIENES;
+    const l = !v ? BIENES : v === "__sinfotos" ? BIENES.filter(b => !b.fotos.length) : BIENES.filter(b => b.clasificacion === v);
     return `<button type="button" role="tab" class="b-grupo ${clase(v)}" data-grupo="${esc(v)}" aria-selected="${estado.grupo === v}">
       <span>${t}</span><b>${l.length.toLocaleString("es-MX")}</b><small>${pesos(l.reduce((s, b) => s + (b.moi || 0), 0))}</small></button>`;
   }).join("");
@@ -70,6 +72,7 @@ const DATOS = [
   ["M.O.I.", (b) => pesos(b.moi)], ["Fecha de adquisición", (b) => fecha(b.fecha_adquisicion)], ["Estado físico (padrón)", "estado_fisico"],
   ["Estado en ficha técnica", "estado_ficha"], ["Condición en fotos", "condicion_foto"], ["Revisó", (b) => [b["revisó"], fecha(b.revisado_en)].filter(Boolean).join(" · ")], ["Propuesta DIF", "propuesta_dif"],
   ["Clasificación en el padrón", "clasificacion_padron"], ["Clasificación en la App", "app_clasificacion"], ["Estatus capturado", (b) => b.estatus_capturado ? `${b.estatus_capturado.quien} · ${fecha(b.estatus_capturado.cuando.slice(0, 10))}` : ""],
+  ["Fotos tomadas en el sistema", (b) => b.fotos_capturadas ? `${b.fotos_capturadas.quien} · ${fecha(b.fotos_capturadas.cuando)}` : ""],
   ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"],
   ["Edificio", "edificio", 3], ["Folio fiscal", "folio_fiscal", 3],
 ];
@@ -82,9 +85,57 @@ function fichaHTML(b) {
     ${b.avisos.length ? `<p class="b-nota"><i class="bi bi-info-circle"></i> ${esc(b.avisos.join(" "))}</p>` : ""}`;
 }
 
+// ── Captura de las 3 fotos desde el celular (bienes sin fotos)
+const captura = { fotos: [null, null, null] };
+function reducir(archivo) {
+  return new Promise((ok, mal) => {
+    const url = URL.createObjectURL(archivo), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
+      const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      ok(cv.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); mal(new Error("No se pudo leer la foto")); };
+    img.src = url;
+  });
+}
+function pintarCaptura() {
+  const b = estado.abierto;
+  const ver = !!b.puede_capturar_fotos && (!b.fotos.length || captura.rehacer);
+  $("bCapFotos").hidden = !ver;
+  $("bRehacer").hidden = !(b.puede_capturar_fotos && b.fotos.length && !captura.rehacer);
+  if (!ver) return;
+  [...$("bCapCasillas").children].forEach((casilla, i) => {
+    const f = captura.fotos[i];
+    casilla.classList.toggle("lista", !!f);
+    casilla.querySelector("img").src = f || "";
+    casilla.querySelector("img").hidden = !f;
+    casilla.querySelector("span").textContent = f ? `Foto ${i + 1} ✓` : `Tomar foto ${i + 1}`;
+  });
+  const n = captura.fotos.filter(Boolean).length;
+  $("bCapGuardar").disabled = n < 3;
+  $("bCapGuardar").textContent = n < 3 ? `Faltan ${3 - n} ${3 - n === 1 ? "foto" : "fotos"}` : "Guardar las 3 fotos";
+}
+async function guardarCaptura() {
+  const b = estado.abierto;
+  $("bCapGuardar").disabled = true; $("bCapMsg").textContent = "Guardando fotos…";
+  try {
+    const r = await fetch(`/api/bienes/${encodeURIComponent(b.no_inventario)}/fotos`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ fotos: captura.fotos }) });
+    if (r.status === 401) { location.href = "index.html"; return; }
+    const d = await r.json();
+    if (!d.ok) { $("bCapMsg").textContent = d.mensaje || "No se pudieron guardar."; $("bCapGuardar").disabled = false; return; }
+    b.fotos = d.fotos; b.fotos_capturadas = d.fotos_capturadas;
+    captura.fotos = [null, null, null]; captura.rehacer = false;
+    pintarGrupos(); pintar(); verFicha(b.no_inventario);
+    $("bCapMsg").textContent = "";
+  } catch (e) { $("bCapMsg").textContent = "Sin conexión. Intenta de nuevo."; $("bCapGuardar").disabled = false; }
+}
+
 function mostrarFoto() {
   const b = estado.abierto, n = b.fotos.length;
   $("bFoto").hidden = !n; $("bSinFoto").hidden = !!n;
+  document.querySelector(".b-foto").hidden = !n && !!b.puede_capturar_fotos;   // sin fotos: arriba va la captura
   $("bFotoAnt").hidden = $("bFotoSig").hidden = n < 2;
   if (n) { $("bFoto").src = b.fotos[estado.foto]; $("bFoto").alt = `Foto ${estado.foto + 1} de ${n} del bien ${b.no_inventario}`; }
   [...$("bMiniaturas").children].forEach((m, i) => m.setAttribute("aria-current", String(i === estado.foto)));
@@ -93,6 +144,7 @@ function mostrarFoto() {
 function verFicha(inv) {
   const b = BIENES.find(x => x.no_inventario === inv);
   if (!b) return;
+  if (estado.abierto !== b) { captura.fotos = [null, null, null]; captura.rehacer = false; $("bCapMsg").textContent = ""; }
   estado.abierto = b; estado.foto = 0;
   $("bTitulo").textContent = b.descripcion || `Bien ${b.no_inventario}`;
   $("bChips").innerHTML = `<span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span><span class="b-inv">No. ${esc(b.no_inventario)}</span>`
@@ -108,7 +160,7 @@ function verFicha(inv) {
   $("bMiniaturas").innerHTML = b.fotos.map((f, i) => `<button type="button" data-i="${i}" aria-label="Ver foto ${i + 1}"><img src="${f}" alt=""></button>`).join("");
   const i = estado.vista.indexOf(b);
   $("bAnteriorBien").disabled = i <= 0; $("bSiguienteBien").disabled = i < 0 || i >= estado.vista.length - 1;
-  mostrarFoto();
+  mostrarFoto(); pintarCaptura();
   if (!$("bDialogo").open) $("bDialogo").showModal();
 }
 
@@ -168,6 +220,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("bFoto").addEventListener("click", () => window.open($("bFoto").src, "_blank"));
   $("bImprimir").addEventListener("click", () => verPdf(estado.abierto));
   $("bPdfCerrar").addEventListener("click", () => $("bPdf").close());
+  $("bCapCasillas").addEventListener("change", async (e) => {
+    const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!archivo) return;
+    $("bCapMsg").textContent = "Preparando foto…";
+    try { captura.fotos[i] = await reducir(archivo); $("bCapMsg").textContent = ""; } catch (x) { $("bCapMsg").textContent = "Esa foto no se pudo leer. Tómala otra vez."; }
+    pintarCaptura();
+  });
+  $("bCapGuardar").addEventListener("click", guardarCaptura);
+  $("bRehacer").addEventListener("click", () => { captura.rehacer = true; captura.fotos = [null, null, null]; pintarCaptura(); });
   $("bDescargar").addEventListener("click", async (e) => { e.preventDefault(); const url = await enlacePdf(estado.abierto); if (url) window.open(url, "_blank", "noopener"); });
   const capturar = async (valor) => {
     const b = estado.abierto;
@@ -183,5 +244,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("bOpciones").addEventListener("click", (e) => { const o = e.target.closest("button"); if (o) capturar(o.dataset.v); });
   $("bQuitar").addEventListener("click", () => capturar(null));
   window.addEventListener("resize", pintar);
+  // el encabezado se arma después: al cambiar de alto, se recalculan los renglones que caben
+  let arribaAntes = $("bContenedor").getBoundingClientRect().top;
+  const revisar = () => { const a = $("bContenedor").getBoundingClientRect().top + window.scrollY; if (Math.abs(a - arribaAntes) > 2) { arribaAntes = a; pintar(); } };
+  if (window.ResizeObserver) new ResizeObserver(revisar).observe(document.body);
   pintar();
 });

@@ -160,7 +160,10 @@ RUTA_FT = os.path.join(AQUI, "data", "ft_pag.json")
 ESTADO_FT = {"BUENO": "Bueno", "REGULAR": "Regular", "MALO": "Malo", "INSERVIBLE": "Inservible"}
 nuevos_ft = 0
 if os.path.exists(RUTA_FT):
+    # números que el OCR leyó mal, corregidos con una segunda/tercera lectura (data/ft_correcciones.json)
+    CORR = json.load(open(os.path.join(AQUI, "data", "ft_correcciones.json"))) if os.path.exists(os.path.join(AQUI, "data", "ft_correcciones.json")) else {}
     for num, f in json.load(open(RUTA_FT, encoding="utf-8")).items():
+        num = CORR.get(num, num)
         estado = ESTADO_FT.get(f.get("estatus_contable", "").upper().strip(" .,"), "")
         if num not in bienes:
             nuevos_ft += 1
