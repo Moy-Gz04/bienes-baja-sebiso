@@ -168,7 +168,7 @@ if os.path.exists(RUTA_FT):
         if num not in bienes:
             nuevos_ft += 1
             bienes[num] = {"no_inventario": num, "padron": "Fuera del padrón", "clasificacion": "Fuera del padrón", "filas": [],
-                           "avisos": ["Viene en las fichas escaneadas (FT-PAG Nueva) pero no en el padrón. Los datos se leyeron de la ficha: revísalos."]}
+                           "avisos": []}
             orden.append(num)
             b = bienes[num]
             for k in ("descripcion", "marca", "modelo", "serie", "organo_superior", "unidad_presupuestal", "adscripcion", "cog", "clave_armonizada", "fecha_adquisicion", "moi"):

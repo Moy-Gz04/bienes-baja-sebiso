@@ -41,7 +41,7 @@ function pintar() {
   estado.vista = lista;
   $("bCuerpo").innerHTML = lista.map(b => `<tr data-inv="${esc(b.no_inventario)}">
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
-      <td class="b-num">${esc(b.no_inventario)}${b.avisos.length ? ` <i class="bi bi-info-circle-fill b-aviso" title="${esc(b.avisos.join(" "))}"></i>` : ""}</td>
+      <td class="b-num">${esc(b.no_inventario)}</td>
       <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small></span></td>
       <td><span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span>${b.propuesta_dif ? `<small class="b-sub">${esc(b.propuesta_dif)}</small>` : ""}</td>
       <td class="b-c">${estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "—"}</td>
@@ -73,7 +73,7 @@ function fichaHTML(b) {
   return `<dl class="b-datos">${(SOLO_CAPTURA ? DATOS_CAPTURA : DATOS).map(([t, c, ancho]) => `<div${ancho ? ` class="a${ancho}"` : ""}><dt>${t}</dt><dd>${esc(valor(b, c)) || "—"}</dd></div>`).join("")}</dl>
     ${b.caracteristicas ? `<p class="b-texto"><b>Características</b>${esc(b.caracteristicas)}</p>` : ""}
     ${b.pendiente && !b.estatus_capturado ? `<p class="b-nota b-nota-pend"><i class="bi bi-exclamation-triangle"></i> ${esc(b.pendiente)}</p>` : ""}
-    ${b.avisos.length ? `<p class="b-nota"><i class="bi bi-info-circle"></i> ${esc(b.avisos.join(" "))}</p>` : ""}`;
+`;
 }
 
 // ── Captura de las 3 fotos desde el celular (bienes sin fotos)
