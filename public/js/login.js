@@ -44,6 +44,7 @@ async function login(){
                 'area',
                 data.area
             );
+            localStorage.setItem('rol', data.rol || 'completo');
 
             // REDIRECCIÓN
 

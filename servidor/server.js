@@ -37,6 +37,9 @@ sql`CREATE TABLE IF NOT EXISTS fotos_capturadas (
   imagen BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (no_inventario, orden))`
   .catch(e => console.error("No se pudo preparar fotos_capturadas:", e.message));
 
+// rol "captura": solo ve los bienes sin fotos y solo puede tomarlas
+sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'completo'`.catch(e => console.error("rol:", e.message));
+
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
 app.get("/api/salud", (req, res) => res.json({ ok: true }));
@@ -49,13 +52,13 @@ app.post("/api/auth/login", async (req, res) => {
   if (reg.length >= 10) return res.status(429).json({ error: "Demasiados intentos. Espera unos minutos." });
   try {
     const usuario = String(req.body?.usuario || "").trim();
-    const [u] = await sql`SELECT id, usuario, password_hash, area FROM usuarios WHERE usuario = ${usuario}`;
+    const [u] = await sql`SELECT id, usuario, password_hash, area, rol FROM usuarios WHERE usuario = ${usuario}`;
     if (!u || !bcrypt.compareSync(String(req.body?.password || ""), u.password_hash)) {
       intentos.set(ip, [...reg, ahora]);
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
     intentos.delete(ip);
-    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area }, SECRETO, { expiresIn: "8h" }), area: u.area });
+    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol }, SECRETO, { expiresIn: "8h" }), area: u.area, rol: u.rol });
   } catch (e) { fallo(res, e, "No se pudo iniciar sesión."); }
 });
 
@@ -63,6 +66,7 @@ function sesion(req, res, next) {
   try {
     req.usuario = jwt.verify(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""), SECRETO);
     if (req.usuario.proposito) throw new Error("token de otro tipo");
+    req.soloCaptura = req.usuario.rol === "captura";
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
 }
@@ -85,16 +89,22 @@ app.get("/api/bienes", sesion, async (req, res) => {
       fotos: b.fotos.length ? b.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
       fotos_capturadas: !b.fotos.length && n_capturadas > 0 ? { quien: foto_captura.split("|")[0], cuando: foto_captura.split("|")[1] } : null,
       puede_capturar_fotos: !b.fotos.length, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
-      tiene_pdf: !!(pdf_drive_id || pdf),
+      tiene_pdf: !!(pdf_drive_id || pdf), pdf_en_drive: !!pdf_drive_id,
       clasificacion: capturado || b.clasificacion,
       estatus_capturado: capturado ? { clasificacion: capturado, quien: capturo, cuando: new Date(capturado_en).toISOString() } : null,
     }));
+    if (req.soloCaptura) {
+      // solo lo necesario para identificar el bien y fotografiarlo
+      const CAMPOS = ["no_inventario", "descripcion", "marca", "modelo", "serie", "material", "color", "ubicacion", "edificio", "unidad_presupuestal", "adscripcion", "fotos", "fotos_capturadas", "puede_capturar_fotos"];
+      return res.json({ ok: true, rol: "captura", bienes: bienes.filter(b => b.puede_capturar_fotos).map(b => Object.fromEntries(CAMPOS.map(k => [k, b[k]]))).map(b => ({ ...b, clasificacion: b.fotos_capturadas ? "Fotos tomadas" : "Faltan fotos", avisos: [], filas: [] })) });
+    }
     res.json({ ok: true, bienes });
   } catch (e) { fallo(res, e, "No se pudieron cargar los bienes."); }
 });
 
 // ── Captura del estatus de un bien "Pendiente de estatus" (null = regresarlo a pendiente)
 app.post("/api/estatus", sesion, async (req, res) => {
+  if (req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
   try {
     const inv = String(req.body?.no_inventario || "");
     const [b] = await sql`SELECT pendiente FROM bienes WHERE no_inventario = ${inv}`;
@@ -144,6 +154,7 @@ app.get("/api/foto/:inv/:orden", async (req, res) => {
 
 // ── Ficha técnica en PDF. Paso 1 (con sesión): un enlace que dura 5 min. Paso 2: el PDF, pedido a Drive y guardado un rato en memoria.
 app.get("/api/ficha/:inv/enlace", sesion, (req, res) => {
+  if (req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
   const inv = String(req.params.inv).replace(/\D/g, "");
   res.json({ ok: true, url: `/api/ficha/${inv}/pdf?t=${jwt.sign({ proposito: "ficha", inv }, SECRETO, { expiresIn: "5m" })}` });
 });

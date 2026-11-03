@@ -111,7 +111,7 @@ body.con-encabezado-sistemas::before{ display:none; }
 .b-quitar{ padding:3px 10px; border:1px solid var(--pend); border-radius:999px; background:#fff; color:var(--pend); font:600 11px 'Montserrat',sans-serif; cursor:pointer; }
 .b-quitar[hidden]{ display:none; }
 .b-nota-pend{ background:var(--pend-f); color:var(--pend); }
-#bDescargar{ text-decoration:none; } #bDescargar[hidden]{ display:none; }
+#bDescargar{ text-decoration:none; } #bDescargar[hidden], #bImprimir[hidden]{ display:none; }
 .b-pdf{ width:min(1180px,96vw); height:94vh; }
 .b-pdf[open]{ display:flex; flex-direction:column; }
 .b-pdf-cabeza{ display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--borde); font-family:'Montserrat',sans-serif; }
@@ -192,4 +192,49 @@ body.con-encabezado-sistemas::before{ display:none; }
   .b-acciones .b-hueco{ display:none; }
   .b-acciones .tv-btn{ flex:1 1 auto; justify-content:center; }
   .b-pdf-cabeza{ flex-wrap:wrap; } .b-pdf-cabeza h2{ flex-basis:100%; }
+}
+
+/* usuario de solo captura de fotos: sin montos, estatus ni fichas */
+body.solo-captura #bEstado, body.solo-captura #bFicha, body.solo-captura #bOrden, body.solo-captura #bFotos,
+body.solo-captura #bTabla th:nth-child(5), body.solo-captura #bTabla td:nth-child(5),
+body.solo-captura #bTabla th:nth-child(6), body.solo-captura #bTabla td:nth-child(6),
+body.solo-captura .b-resumen, body.solo-captura .b-grupo small, body.solo-captura .b-chips .b-estado{ display:none !important; }
+body.solo-captura .b-barra{ grid-template-columns:1fr; }
+body.solo-captura .b-grupos{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+
+/* ---------- gráficas ---------- */
+.b-cabeza-der{ display:flex; align-items:center; gap:16px; }
+#bGraficas[hidden]{ display:none; }
+.b-graf{ width:min(1180px,96vw); height:94vh; overflow:hidden; }
+.b-graf[open]{ display:flex; flex-direction:column; }
+.b-graf-cuerpo{ flex:1; overflow:auto; padding:14px 16px 18px; font-family:'Montserrat',sans-serif; color:var(--txt); background:var(--suave); }
+.g-cifras{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
+.g-cifras div{ padding:10px 14px; border:1px solid var(--borde); border-radius:12px; background:#fff; }
+.g-cifras b{ display:block; font-size:22px; font-weight:800; color:var(--g); font-variant-numeric:tabular-nums; }
+.g-cifras span{ font-size:11.5px; color:var(--txt2); }
+.g-rejilla{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.g-caja{ padding:12px 14px; border:1px solid var(--borde); border-radius:12px; background:#fff; min-width:0; }
+.g-caja h3{ margin:0 0 8px; font-size:13px; font-weight:800; color:var(--g); }
+.g-nota{ margin:-4px 0 8px; font-size:10.5px; color:var(--txt2); }
+.g-barras{ display:grid; gap:4px; }
+.g-fila{ display:grid; grid-template-columns:minmax(0,13em) minmax(0,1fr) auto; align-items:center; gap:8px; padding:3px 4px; border-radius:6px; font-size:11.5px; cursor:default; }
+.g-fila:hover, .g-fila:focus-visible{ background:var(--suave); outline:none; }
+.g-eti{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--txt2); }
+.g-pista{ position:relative; height:12px; border-radius:4px; background:#F3ECE6; overflow:hidden; }
+.g-barra{ position:absolute; left:0; top:0; bottom:0; border-radius:0 4px 4px 0; background:var(--g); }
+.g-val{ font-weight:700; font-variant-numeric:tabular-nums; color:var(--txt); }
+.g-num{ display:flex; align-items:baseline; gap:8px; margin-bottom:8px; }
+.g-num b{ font-size:26px; font-weight:800; color:var(--g); font-variant-numeric:tabular-nums; }
+.g-num span{ font-size:11.5px; color:var(--txt2); }
+.g-pista-alta{ height:14px; }
+.b-tip{ position:absolute; z-index:5; max-width:280px; padding:6px 10px; border-radius:8px; background:#201017; color:#fff; font:600 11.5px 'Montserrat',sans-serif; pointer-events:none; box-shadow:0 6px 18px rgba(0,0,0,.25); }
+.b-tip[hidden]{ display:none; }
+@media (max-width:1100px){ .g-rejilla{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:900px){
+  .b-graf{ width:100vw; max-width:100vw; height:100dvh; max-height:100dvh; margin:0; border-radius:0; }
+  .g-cifras{ grid-template-columns:repeat(2,minmax(0,1fr)); } .g-rejilla{ grid-template-columns:1fr; }
+  .b-graf-cuerpo{ overflow-x:hidden; padding:10px; }
+  .g-cifras b{ font-size:17px; overflow-wrap:anywhere; }
+  .g-fila{ grid-template-columns:minmax(0,8.5em) minmax(0,1fr) auto; gap:6px; font-size:11px; }
+  .b-cabeza-der{ gap:8px; } .tv-cabeza{ align-items:center; }
 }

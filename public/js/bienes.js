@@ -1,6 +1,8 @@
 let BIENES = [];
+let SOLO_CAPTURA = false;   // usuario que solo toma fotos de los bienes que no tienen
 const estado = { grupo: "", abierto: null, foto: 0, vista: [] };
-const GRUPOS = [
+const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
+let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
   ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"], ["__sinfotos", "Sin fotos"],
 ];
@@ -11,7 +13,7 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "Faltan fotos": "baja", "Fotos tomadas": "reap" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
 
 function filtrados() {
@@ -64,8 +66,11 @@ const DATOS = [
 ];
 const valor = (b, c) => (typeof c === "function" ? c(b) : b[c]) || "";
 
+const DATOS_CAPTURA = [["No. inventario", "no_inventario"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"], ["Material", "material"], ["Color", "color"],
+  ["Ubicación", (b) => b.ubicacion || b.edificio, 3], ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"]];
+
 function fichaHTML(b) {
-  return `<dl class="b-datos">${DATOS.map(([t, c, ancho]) => `<div${ancho ? ` class="a${ancho}"` : ""}><dt>${t}</dt><dd>${esc(valor(b, c)) || "—"}</dd></div>`).join("")}</dl>
+  return `<dl class="b-datos">${(SOLO_CAPTURA ? DATOS_CAPTURA : DATOS).map(([t, c, ancho]) => `<div${ancho ? ` class="a${ancho}"` : ""}><dt>${t}</dt><dd>${esc(valor(b, c)) || "—"}</dd></div>`).join("")}</dl>
     ${b.caracteristicas ? `<p class="b-texto"><b>Características</b>${esc(b.caracteristicas)}</p>` : ""}
     ${b.pendiente && !b.estatus_capturado ? `<p class="b-nota b-nota-pend"><i class="bi bi-exclamation-triangle"></i> ${esc(b.pendiente)}</p>` : ""}
     ${b.avisos.length ? `<p class="b-nota"><i class="bi bi-info-circle"></i> ${esc(b.avisos.join(" "))}</p>` : ""}`;
@@ -112,6 +117,7 @@ async function guardarCaptura() {
     const d = await r.json();
     if (!d.ok) { $("bCapMsg").textContent = d.mensaje || "No se pudieron guardar."; $("bCapGuardar").disabled = false; return; }
     b.fotos = d.fotos; b.fotos_capturadas = d.fotos_capturadas;
+    if (SOLO_CAPTURA) b.clasificacion = "Fotos tomadas";
     captura.fotos = [null, null, null]; captura.rehacer = false;
     pintarGrupos(); pintar(); verFicha(b.no_inventario);
     $("bCapMsg").textContent = "";
@@ -136,7 +142,7 @@ function verFicha(inv) {
   $("bChips").innerHTML = `<span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span><span class="b-inv">No. ${esc(b.no_inventario)}</span>`
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
-  $("bDescargar").hidden = !b.tiene_pdf; $("bImprimir").hidden = !b.tiene_pdf;
+  $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
   $("bCaptura").hidden = !b.pendiente;
   if (b.pendiente) {
     $("bCapturaTitulo").textContent = b.estatus_capturado ? "Estatus capturado" : "Capturar estatus";
@@ -165,6 +171,60 @@ async function verPdf(b) {
   if (url) { $("bPdfMarco").src = url; $("bPdfAbrir").href = url; }
 }
 
+// ── Gráficas: todo el padrón en resumen (siempre sobre todos los bienes, no sobre el filtro)
+function barras(titulo, filas, { dinero = false, nota = "" } = {}) {
+  const max = Math.max(1, ...filas.map(f => f[1]));
+  const total = filas.reduce((s, f) => s + f[1], 0);
+  return `<section class="g-caja"><h3>${titulo}</h3>${nota ? `<p class="g-nota">${nota}</p>` : ""}<div class="g-barras">${filas.map(([eti, v, extra]) => {
+    const txt = dinero ? pesos(v) : v.toLocaleString("es-MX");
+    const pct = total ? Math.round(v / total * 1000) / 10 : 0;
+    return `<div class="g-fila" tabindex="0" data-tip="${esc(`${eti}: ${txt} (${pct}%)${extra ? " · " + extra : ""}`)}">
+      <span class="g-eti">${esc(eti)}</span><span class="g-pista"><span class="g-barra" style="width:${Math.max(v ? 1.5 : 0, v / max * 100)}%"></span></span><span class="g-val">${txt}</span></div>`;
+  }).join("")}</div></section>`;
+}
+function avance(titulo, hecho, total, texto) {
+  const pct = total ? Math.round(hecho / total * 100) : 0;
+  return `<section class="g-caja g-avance"><h3>${titulo}</h3><div class="g-num"><b>${pct}%</b><span>${texto}</span></div>
+    <div class="g-pista g-pista-alta" role="img" aria-label="${pct}%"><span class="g-barra" style="width:${pct}%"></span></div></section>`;
+}
+function pintarGraficas() {
+  const B = BIENES;
+  const cuenta = (fn) => { const m = new Map(); B.forEach(b => { const k = fn(b); if (k) m.set(k, (m.get(k) || 0) + 1); }); return m; };
+  const suma = (fn) => { const m = new Map(); B.forEach(b => { const k = fn(b); if (k) m.set(k, (m.get(k) || 0) + (b.moi || 0)); }); return m; };
+  const orden = ["Baja definitiva", "Para reaprovechamiento", "Propuesta DIF", "Pendiente de estatus", "Fuera del padrón"];
+  const porClas = cuenta(b => b.clasificacion), valClas = suma(b => b.clasificacion);
+  const porEst = cuenta(b => estadoDe(b) || "Sin estado");
+  const porUnidad = [...cuenta(b => sinArea(b.unidad_presupuestal) || "Sin unidad")].sort((a, b) => b[1] - a[1]);
+  const unidades = porUnidad.slice(0, 7);
+  const resto = porUnidad.slice(7).reduce((s, f) => s + f[1], 0);
+  if (resto) unidades.push([`Otras ${porUnidad.length - 7} unidades`, resto]);
+  const porDescr = [...cuenta(b => b.descripcion)].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const decada = [...cuenta(b => b.fecha_adquisicion ? `${b.fecha_adquisicion.slice(0, 3)}0s` : "")].sort();
+  const total = B.length, valor = B.reduce((s, b) => s + (b.moi || 0), 0);
+  const conFotos = B.filter(b => b.fotos.length).length, tomadas = B.filter(b => b.fotos_capturadas).length;
+  const pend = B.filter(b => b.pendiente).length, pendHechos = B.filter(b => b.pendiente && b.estatus_capturado).length;
+  const conPdf = B.filter(b => b.pdf_en_drive).length;
+  const n = (x) => x.toLocaleString("es-MX");
+  $("bGrafCuerpo").innerHTML = `
+    <div class="g-cifras">
+      <div><b>${n(total)}</b><span>bienes</span></div>
+      <div><b>${pesos(valor)}</b><span>valor M.O.I.</span></div>
+      <div><b>${n(porClas.get("Baja definitiva") || 0)}</b><span>en baja definitiva</span></div>
+      <div><b>${n((porClas.get("Para reaprovechamiento") || 0) + (porClas.get("Propuesta DIF") || 0))}</b><span>servibles (reaprovechamiento + DIF)</span></div>
+    </div>
+    <div class="g-rejilla">
+      ${barras("Bienes por clasificación", orden.map(k => [k, porClas.get(k) || 0, pesos(valClas.get(k) || 0)]))}
+      ${barras("Valor M.O.I. por clasificación", orden.map(k => [k, valClas.get(k) || 0]), { dinero: true })}
+      ${barras("Estado físico", ["Bueno", "Regular", "Malo", "Inservible", "Sin estado"].filter(k => porEst.get(k)).map(k => [k, porEst.get(k)]), { nota: "Según el padrón; si no lo trae, la ficha técnica." })}
+      ${barras("Por unidad presupuestal", unidades)}
+      ${barras("Bienes más comunes", porDescr)}
+      ${barras("Año de adquisición (por década)", decada)}
+      ${avance("Fotos", conFotos, total, `${n(conFotos)} de ${n(total)} con fotos · ${n(tomadas)} tomadas en el sistema`)}
+      ${avance("Estatus de pendientes", pendHechos, pend, `${n(pendHechos)} de ${n(pend)} ya capturados`)}
+      ${avance("Fichas técnicas en Drive", conPdf, total, `${n(conPdf)} de ${n(total)} ya subidas`)}
+    </div>`;
+}
+
 function imprimir() {
   const b = estado.abierto;
   $("bImpresion").innerHTML = `<img class="b-membrete" src="img/membrete-bienestar.png" alt="">
@@ -179,7 +239,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("bCuerpo").innerHTML = `<tr><td colspan="7" class="tv-vacio">Cargando bienes…</td></tr>`;
   const r = await fetch("/api/bienes", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
   if (r.status === 401) { location.href = "index.html"; return; }
-  BIENES = (await r.json()).bienes;
+  const respuesta = await r.json();
+  BIENES = respuesta.bienes;
+  if (respuesta.rol === "captura") {
+    SOLO_CAPTURA = true; GRUPOS = GRUPOS_CAPTURA; estado.grupo = "Faltan fotos";
+    document.body.classList.add("solo-captura");
+    document.querySelector(".tv-eyebrow").textContent = "Captura de fotos";
+    document.querySelector(".tv-cabeza h1").textContent = "Bienes sin fotos";
+  }
   BIENES.forEach(b => { b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.cog, b.clave_armonizada, b.adscripcion, b.unidad_presupuestal, b.edificio, b.folio_fiscal, b.propuesta_dif, b.caracteristicas, b.material, b.color, b.ubicacion].join(" ")); });
   const estados = [...new Set(BIENES.map(estadoDe).filter(Boolean))].sort();
   $("bEstado").innerHTML = `<option value="">Todos los estados</option>` + estados.map(e => `<option>${esc(e)}</option>`).join("");
@@ -203,6 +270,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("bFoto").addEventListener("click", () => window.open($("bFoto").src, "_blank"));
   $("bImprimir").addEventListener("click", () => verPdf(estado.abierto));
+  $("bGraficas").hidden = SOLO_CAPTURA;
+  $("bGraficas").addEventListener("click", () => { pintarGraficas(); $("bGraf").showModal(); });
+  $("bGrafCerrar").addEventListener("click", () => $("bGraf").close());
+  // recuadro con el detalle al pasar el cursor o tocar una barra
+  const tip = $("bTip");
+  const mostrarTip = (fila, x, y) => {
+    tip.textContent = fila.dataset.tip; tip.hidden = false;
+    const caja = $("bGraf").getBoundingClientRect(), w = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(8, x - caja.left - w / 2), caja.width - w - 8) + "px";
+    tip.style.top = (y - caja.top - tip.offsetHeight - 12) + "px";
+  };
+  $("bGrafCuerpo").addEventListener("pointermove", (e) => { const f = e.target.closest(".g-fila"); if (f) mostrarTip(f, e.clientX, e.clientY); else tip.hidden = true; });
+  $("bGrafCuerpo").addEventListener("pointerleave", () => { tip.hidden = true; });
+  $("bGrafCuerpo").addEventListener("focusin", (e) => { const f = e.target.closest(".g-fila"); if (f) { const r = f.getBoundingClientRect(); mostrarTip(f, r.left + r.width / 2, r.top); } });
+  $("bGrafCuerpo").addEventListener("focusout", () => { tip.hidden = true; });
   $("bPdfCerrar").addEventListener("click", () => $("bPdf").close());
   $("bCapCasillas").addEventListener("change", async (e) => {
     const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";

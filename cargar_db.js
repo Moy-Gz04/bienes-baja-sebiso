@@ -23,9 +23,10 @@ const fila = (b) => ({
 });
 
 (async () => {
+  await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'completo'`;
   for (const u of usuarios) {
-    await sql`INSERT INTO usuarios (usuario, password_hash, area) VALUES (${u.usuario}, ${u.password_hash}, ${u.area})
-      ON CONFLICT (usuario) DO UPDATE SET password_hash = EXCLUDED.password_hash, area = EXCLUDED.area`;
+    await sql`INSERT INTO usuarios (usuario, password_hash, area, rol) VALUES (${u.usuario}, ${u.password_hash}, ${u.area}, ${u.rol || "completo"})
+      ON CONFLICT (usuario) DO UPDATE SET password_hash = EXCLUDED.password_hash, area = EXCLUDED.area, rol = EXCLUDED.rol`;
   }
   const LOTE = 100;
   for (let i = 0; i < bienes.length; i += LOTE) {

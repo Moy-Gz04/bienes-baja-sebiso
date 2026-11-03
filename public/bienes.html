@@ -23,7 +23,10 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
 <section class="tv">
   <header class="tv-cabeza">
     <div><p class="tv-eyebrow">Padrones de bienes muebles</p><h1>Bienes en propuesta de baja</h1></div>
-    <div class="b-resumen" id="bResumen" aria-live="polite"></div>
+    <div class="b-cabeza-der">
+      <div class="b-resumen" id="bResumen" aria-live="polite"></div>
+      <button type="button" class="tv-btn tv-btn-principal" id="bGraficas"><i class="bi bi-bar-chart-line"></i> Gráficas</button>
+    </div>
   </header>
 
   <div class="b-grupos" role="tablist" aria-label="Clasificación" id="bGrupos"></div>
@@ -91,6 +94,13 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
         </div>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="tv-dialogo b-graf" id="bGraf" aria-labelledby="bGrafTitulo">
+    <div class="b-pdf-cabeza"><h2 id="bGrafTitulo">Resumen de bienes en propuesta de baja</h2>
+      <button type="button" class="tv-btn tv-btn-principal" id="bGrafCerrar">Cerrar</button></div>
+    <div class="b-graf-cuerpo" id="bGrafCuerpo"></div>
+    <div class="b-tip" id="bTip" role="tooltip" hidden></div>
   </dialog>
 
   <dialog class="tv-dialogo b-pdf" id="bPdf" aria-labelledby="bPdfTitulo">

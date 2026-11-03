@@ -189,6 +189,18 @@ if os.path.exists(RUTA_FT):
 for b in bienes.values():
     if b["clasificacion"] == "Solo fotos": b["clasificacion"] = b["padron"] = "Fuera del padrón"
 
+# Bienes con exactamente las mismas fotos que otro bien (error de captura): se quitan para volver a tomarlas
+huellas = {}
+for b in bienes.values():
+    if b.get("fotos"):
+        h = tuple(sorted(hashlib.md5(open(os.path.join(AQUI, "public", f), "rb").read()).hexdigest() for f in b["fotos"]))
+        huellas.setdefault(h, []).append(b["no_inventario"])
+for grupo in (g for g in huellas.values() if len(g) > 1):
+    for num in grupo:
+        otros = ", ".join(x for x in grupo if x != num)
+        bienes[num]["fotos"] = []
+        bienes[num]["avisos"].append(f"Tenía las mismas fotos que el {otros}; se quitaron para volver a tomarlas.")
+
 lista = [bienes[n] for n in orden]
 json.dump(lista, open(os.path.join(AQUI, "data", "bienes.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
 total_filas = sum(len(b["filas"]) for b in lista)
