@@ -1,5 +1,5 @@
 let BIENES = [];
-const estado = { pagina: 1, grupo: "", abierto: null, foto: 0, vista: [] };
+const estado = { grupo: "", abierto: null, foto: 0, vista: [] };
 const GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
   ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"], ["__sinfotos", "Sin fotos"],
@@ -26,13 +26,6 @@ function filtrados() {
   return lista;
 }
 
-// Sin barras deslizantes: en cada página caben las filas que permite la ventana
-function filasPorPagina() {
-  const arriba = $("bContenedor").getBoundingClientRect().top;
-  const movil = window.innerWidth <= 900;
-  return Math.max(4, Math.floor((window.innerHeight - arriba - (movil ? 0 : 34) - 58) / (movil ? 92 : 53)));
-}
-
 function pintarGrupos() {
   $("bGrupos").innerHTML = GRUPOS.map(([v, t]) => {
     const l = !v ? BIENES : v === "__sinfotos" ? BIENES.filter(b => !b.fotos.length) : BIENES.filter(b => b.clasificacion === v);
@@ -44,11 +37,7 @@ function pintarGrupos() {
 function pintar() {
   const lista = filtrados();
   estado.vista = lista;
-  const porPagina = filasPorPagina();
-  const paginas = Math.max(1, Math.ceil(lista.length / porPagina));
-  estado.pagina = Math.min(estado.pagina, paginas);
-  const inicio = (estado.pagina - 1) * porPagina;
-  $("bCuerpo").innerHTML = lista.slice(inicio, inicio + porPagina).map(b => `<tr data-inv="${esc(b.no_inventario)}">
+  $("bCuerpo").innerHTML = lista.map(b => `<tr data-inv="${esc(b.no_inventario)}">
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
       <td class="b-num">${esc(b.no_inventario)}${b.avisos.length ? ` <i class="bi bi-info-circle-fill b-aviso" title="${esc(b.avisos.join(" "))}"></i>` : ""}</td>
       <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small></span></td>
@@ -58,9 +47,6 @@ function pintar() {
       <td class="b-c"><button type="button" class="p-icono b-ver" title="Ver ficha técnica" aria-label="Ver ficha técnica del ${esc(b.no_inventario)}"><i class="bi bi-file-earmark-text"></i></button></td>
     </tr>`).join("") || `<tr><td colspan="7" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
   $("bConteo").textContent = `${lista.length.toLocaleString("es-MX")} ${lista.length === 1 ? "bien" : "bienes"}`;
-  $("bPagina").textContent = `Página ${estado.pagina} de ${paginas}`;
-  $("bAnterior").disabled = estado.pagina <= 1;
-  $("bSiguiente").disabled = estado.pagina >= paginas;
   const total = lista.reduce((s, b) => s + (b.moi || 0), 0);
   $("bResumen").innerHTML = `<span><b>${lista.length.toLocaleString("es-MX")}</b> bienes</span><span><b>${pesos(total)}</b> valor M.O.I.</span><span><b>${lista.filter(b => b.fotos.length).length.toLocaleString("es-MX")}</b> con fotos</span><span><b>${lista.filter(b => b.ficha).length.toLocaleString("es-MX")}</b> con ficha previa</span>`;
 }
@@ -200,11 +186,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   pintarGrupos();
   $("bGrupos").addEventListener("click", (e) => {
     const g = e.target.closest(".b-grupo"); if (!g) return;
-    estado.grupo = g.dataset.grupo; estado.pagina = 1; pintarGrupos(); pintar();
+    estado.grupo = g.dataset.grupo; pintarGrupos(); pintar();
   });
-  ["bBuscar", "bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", () => { estado.pagina = 1; pintar(); }));
-  $("bAnterior").addEventListener("click", () => { estado.pagina--; pintar(); });
-  $("bSiguiente").addEventListener("click", () => { estado.pagina++; pintar(); });
+  ["bBuscar", "bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", pintar));
   $("bCuerpo").addEventListener("click", (e) => { const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
   $("bMiniaturas").addEventListener("click", (e) => { const m = e.target.closest("button"); if (m) { estado.foto = +m.dataset.i; mostrarFoto(); } });
   const mover = (d) => { const n = estado.abierto.fotos.length; if (n) { estado.foto = (estado.foto + d + n) % n; mostrarFoto(); } };
@@ -243,10 +227,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
   $("bOpciones").addEventListener("click", (e) => { const o = e.target.closest("button"); if (o) capturar(o.dataset.v); });
   $("bQuitar").addEventListener("click", () => capturar(null));
-  window.addEventListener("resize", pintar);
-  // el encabezado se arma después: al cambiar de alto, se recalculan los renglones que caben
-  let arribaAntes = $("bContenedor").getBoundingClientRect().top;
-  const revisar = () => { const a = $("bContenedor").getBoundingClientRect().top + window.scrollY; if (Math.abs(a - arribaAntes) > 2) { arribaAntes = a; pintar(); } };
-  if (window.ResizeObserver) new ResizeObserver(revisar).observe(document.body);
   pintar();
 });
