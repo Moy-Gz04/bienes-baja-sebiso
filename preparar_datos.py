@@ -209,6 +209,39 @@ if os.path.exists(RUTA_FT):
 for b in bienes.values():
     if b["clasificacion"] == "Solo fotos": b["clasificacion"] = b["padron"] = "Fuera del padrón"
 
+# Propuesta final de reubicación DIF (SEBISO PROPUESTA FINAL REUBICACION DIF.xlsx, hoja LISTADO DEL PADRON):
+# todo lo que viene en el listado queda en "Propuesta DIF" con su área DIF. Los que no estaban en el sistema se
+# agregan con los datos del listado. Los demás bienes no se tocan.
+REUBICACION = r"C:/Users/jgome/Downloads/SEBISO PROPUESTA FINAL REUBICACION DIF.xlsx"
+cambios_reub = {"agregados": [], "cambio_estatus": [], "cambio_area": []}
+if os.path.exists(REUBICACION):
+    def area_dif(t):
+        t = t.upper()
+        return "DIF PATRONATO" if "PATRONATO" in t else "DIF ASISTENCIA" if "ASISTENCIA" in t else "DIF NIÑEZ" if "ADOLESCENCIA" in t or "NIÑEZ" in t else ""
+    wsr = openpyxl.load_workbook(REUBICACION, data_only=True)["LISTADO DEL PADRON"]
+    encr = [texto(c.value) for c in wsr[4]]
+    for fila in wsr.iter_rows(min_row=5, values_only=True):
+        d = dict(zip(encr, fila)); num = texto(d.get("NUMERO DE INVENTARIO"))
+        if not num: continue
+        area = area_dif(texto(d.get("PROPUESTA DIF HIDALGO")))
+        if num not in bienes:
+            bienes[num] = {"no_inventario": num, "padron": "Fuera del padrón", "clasificacion": "Fuera del padrón", "filas": [], "avisos": [], "fotos": [],
+                           "descripcion": texto(d.get("DESCRIPCION")), "clave_armonizada": texto(d.get("CLAVE ARMONIZADA")), "cog": texto(d.get("COG")),
+                           "marca": texto(d.get("MARCA")), "modelo": texto(d.get("MODELO")), "serie": texto(d.get("SERIE")), "moi": float(d.get("M.O.I.") or 0),
+                           "fecha_adquisicion": texto(d.get("FECHA DE ADQUISICION")), "edificio": texto(d.get("EDIFICIO")), "organo_superior": texto(d.get("ORGANO SUPERIOR")),
+                           "unidad_presupuestal": texto(d.get("UNIDAD PRESUPUESTAL")), "adscripcion": texto(d.get("ADSCRIPCION")),
+                           "pdf": "p/" + hashlib.sha1(SAL + ("pdf/" + num).encode()).hexdigest()[:24] + ".pdf"}
+            orden.append(num); cambios_reub["agregados"].append(num)
+        b = bienes[num]
+        if b["clasificacion"] != "Propuesta DIF":
+            b.setdefault("clasificacion_padron", b["clasificacion"])
+            if num not in cambios_reub["agregados"]: cambios_reub["cambio_estatus"].append([num, b["clasificacion"]])
+            b["clasificacion"] = "Propuesta DIF"
+        elif (b.get("propuesta_dif") or "") != area: cambios_reub["cambio_area"].append([num, b.get("propuesta_dif"), area])
+        b["propuesta_dif"] = area; b.pop("pendiente", None)
+    json.dump(cambios_reub, open(os.path.join(AQUI, "data", "reubicacion_cambios.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(f"reubicación DIF: {len(cambios_reub['agregados'])} agregados, {len(cambios_reub['cambio_estatus'])} cambian a Propuesta DIF, {len(cambios_reub['cambio_area'])} solo cambian de área")
+
 # Bienes con exactamente las mismas fotos que otro bien (error de captura): se quitan para volver a tomarlas
 huellas = {}
 for b in bienes.values():
