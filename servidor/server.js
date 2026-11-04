@@ -72,6 +72,7 @@ function sesion(req, res, next) {
     req.usuario = jwt.verify(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""), SECRETO);
     if (req.usuario.proposito) throw new Error("token de otro tipo");
     req.soloCaptura = req.usuario.rol === "captura";
+    req.soloComprobar = req.usuario.rol === "comprobar";   // solo ve Propuesta DIF y marca palomita / equis
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
 }
@@ -100,6 +101,11 @@ app.get("/api/bienes", sesion, async (req, res) => {
       clasificacion: capturado || b.clasificacion,
       estatus_capturado: capturado ? { clasificacion: capturado, quien: capturo, cuando: new Date(capturado_en).toISOString() } : null,
     }));
+    if (req.soloComprobar) {
+      const grupo = (k) => !k ? "Por comprobar" : k.valor ? "Comprobado" : "No comprobado";
+      return res.json({ ok: true, rol: "comprobar", bienes: bienes.filter(b => b.clasificacion === "Propuesta DIF")
+        .map(b => ({ ...b, clasificacion: grupo(b.comprobado), puede_capturar_fotos: false, avisos: [], filas: [] })) });
+    }
     if (req.soloCaptura) {
       // solo lo necesario para identificar el bien y fotografiarlo
       const CAMPOS = ["no_inventario", "descripcion", "marca", "modelo", "serie", "material", "color", "ubicacion", "edificio", "unidad_presupuestal", "adscripcion", "fotos", "fotos_capturadas", "puede_capturar_fotos"];
@@ -111,7 +117,7 @@ app.get("/api/bienes", sesion, async (req, res) => {
 
 // ── Captura del estatus de un bien "Pendiente de estatus" (null = regresarlo a pendiente)
 app.post("/api/estatus", sesion, async (req, res) => {
-  if (req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
+  if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
   try {
     const inv = String(req.body?.no_inventario || "");
     const [b] = await sql`SELECT pendiente FROM bienes WHERE no_inventario = ${inv}`;
@@ -134,7 +140,8 @@ app.post("/api/comprobado", sesion, async (req, res) => {
   if (req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
   try {
     const inv = String(req.body?.no_inventario || ""), valor = req.body?.valor;
-    const [b] = await sql`SELECT 1 FROM bienes WHERE no_inventario = ${inv}`;
+    const [b] = await sql`SELECT COALESCE(e.clasificacion, b.clasificacion) AS c FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) WHERE b.no_inventario = ${inv}`;
+    if (req.soloComprobar && b && b.c !== "Propuesta DIF") return res.status(403).json({ ok: false, mensaje: "Ese bien no está en Propuesta DIF." });
     if (!b) return res.status(404).json({ ok: false, mensaje: "Ese bien no existe." });
     if (valor === null) { await sql`DELETE FROM comprobaciones WHERE no_inventario = ${inv}`; return res.json({ ok: true, comprobado: null }); }
     if (typeof valor !== "boolean") return res.status(400).json({ ok: false, mensaje: "Marca palomita o equis." });
@@ -147,6 +154,7 @@ app.post("/api/comprobado", sesion, async (req, res) => {
 
 // ── Captura de las 3 fotos de un bien que no tenía (desde el celular). Se pueden volver a tomar.
 app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
+  if (req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo marca la comprobación." });
   try {
     const inv = String(req.params.inv);
     const [b] = await sql`SELECT (SELECT count(*) FROM fotos f WHERE f.no_inventario = b.no_inventario)::int AS n FROM bienes b WHERE no_inventario = ${inv}`;

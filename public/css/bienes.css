@@ -265,3 +265,16 @@ dialog.tv-dialogo{ overscroll-behavior:contain; }
   #bTabla tr{ grid-template-areas:"foto num moi" "foto desc desc" "foto clas est" "foto comp comp"; }
   #bTabla td:nth-child(8){ grid-area:comp; padding-top:4px; }
 }
+
+/* usuario de comprobación (celular): botones grandes, solo búsqueda */
+body.solo-comprobar .b-barra select{ display:none; }
+body.solo-comprobar .b-barra{ grid-template-columns:1fr; }
+body.solo-comprobar .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+@media (max-width:900px){
+  body.solo-comprobar #bTabla tr{ grid-template-columns:56px minmax(0,1fr) auto; grid-template-areas:"foto num comp" "foto desc desc" "foto clas clas"; }
+  body.solo-comprobar #bTabla td:nth-child(5), body.solo-comprobar #bTabla td:nth-child(6){ display:none; }
+  body.solo-comprobar #bTabla td:nth-child(8){ padding-top:0; }
+  body.solo-comprobar .b-marcas{ gap:8px; }
+  body.solo-comprobar .b-marca{ width:46px; height:46px; font-size:21px; border:1.5px solid var(--borde); border-radius:10px; }
+  body.solo-comprobar .b-marca.activa{ border-color:transparent; }
+}

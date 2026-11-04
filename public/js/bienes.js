@@ -1,6 +1,8 @@
 let BIENES = [];
 let SOLO_CAPTURA = false;   // usuario que solo toma fotos de los bienes que no tienen
 const estado = { grupo: "", abierto: null, foto: 0, vista: [] };
+let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
+const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
@@ -13,7 +15,7 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "Faltan fotos": "baja", "Fotos tomadas": "reap" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
 
 function filtrados() {
@@ -60,6 +62,7 @@ async function marcarComprobado(inv, cual) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.ok) return alert(j.mensaje || "No se pudo guardar la comprobación.");
   b.comprobado = j.comprobado;
+  if (SOLO_COMPROBAR) { b.clasificacion = !b.comprobado ? "Por comprobar" : b.comprobado.valor ? "Comprobado" : "No comprobado"; pintarGrupos(); }
   const celda = document.querySelector(`tr[data-inv="${CSS.escape(inv)}"] .b-comp`); if (celda) celda.innerHTML = comprobacion(b);
 }
 
@@ -306,6 +309,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-eyebrow").textContent = "Captura de fotos";
     document.querySelector(".tv-cabeza h1").textContent = "Bienes sin fotos";
   }
+  if (respuesta.rol === "comprobar") {
+    SOLO_COMPROBAR = true; GRUPOS = GRUPOS_COMPROBAR; estado.grupo = "Por comprobar";
+    document.body.classList.add("solo-comprobar");
+    document.querySelector(".tv-eyebrow").textContent = "Comprobación física";
+    document.querySelector(".tv-cabeza h1").textContent = "Propuesta DIF";
+  }
   BIENES.forEach(b => { b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.cog, b.clave_armonizada, b.adscripcion, b.unidad_presupuestal, b.edificio, b.folio_fiscal, b.propuesta_dif, b.caracteristicas, b.material, b.color, b.ubicacion].join(" ")); });
   const estados = [...new Set(BIENES.map(estadoDe).filter(Boolean))].sort();
   $("bEstado").innerHTML = `<option value="">Todos los estados</option>` + estados.map(e => `<option>${esc(e)}</option>`).join("");
@@ -329,7 +338,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("bFoto").addEventListener("click", () => window.open($("bFoto").src, "_blank"));
   $("bImprimir").addEventListener("click", () => verPdf(estado.abierto));
-  $("bGraficas").hidden = SOLO_CAPTURA;
+  $("bGraficas").hidden = SOLO_CAPTURA || SOLO_COMPROBAR;
   $("bGraficas").addEventListener("click", () => { pintarGraficas(); abrir($("bGraf")); });
   $("bGrafCerrar").addEventListener("click", () => cerrar($("bGraf")));
   // recuadro con el detalle al pasar el cursor o tocar una barra
