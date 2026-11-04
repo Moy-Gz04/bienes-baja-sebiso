@@ -278,6 +278,16 @@ for grupo in (g for g in huellas.values() if len(g) > 1):
         bienes[num]["fotos"] = []
         bienes[num]["avisos"].append(f"Tenía las mismas fotos que el {otros}; se quitaron para volver a tomarlas.")
 
+# Bienes mostrados físicamente que no venían en ningún padrón (doc07880520261104164534.pdf): entran sin fotos y
+# pendientes de estatus; las fotos y el estatus se capturan desde el sistema
+for d in json.load(open(os.path.join(AQUI, "data", "agregados_doc.json"), encoding="utf-8")):
+    num = d["no_inventario"]
+    if num in bienes: continue
+    bienes[num] = {"no_inventario": num, "descripcion": d["descripcion"], "padron": "Fuera del padrón", "clasificacion": "Fuera del padrón",
+                   "moi": 0, "filas": [], "fotos": [], "avisos": ["Mostrado físicamente; no viene en los padrones."],
+                   "pendiente": "Mostrado físicamente y no relacionado en los padrones: falta capturar su estatus."}
+    orden.append(num)
+
 lista = [bienes[n] for n in orden]
 json.dump(lista, open(os.path.join(AQUI, "data", "bienes.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
 total_filas = sum(len(b["filas"]) for b in lista)
