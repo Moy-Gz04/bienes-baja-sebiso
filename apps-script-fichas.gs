@@ -57,7 +57,7 @@ function responder_(obj) {
 }
 
 function doGet() {
-  return responder_({ ok: true, mensaje: 'Apps Script de fichas activo.', version: 'fichas-fotos-2026-11-04' });
+  return responder_({ ok: true, mensaje: 'Apps Script de fichas activo.', version: 'fichas-nombres-2026-11-04' });
 }
 
 function doPost(e) {
@@ -68,6 +68,7 @@ function doPost(e) {
     if (d.accion === 'guardarVarios') return responder_(guardarVarios_(d));
     if (d.accion === 'obtener') return responder_(obtener_(d));
     if (d.accion === 'guardarFotos') return responder_(guardarFotos_(d));
+    if (d.accion === 'renombrarFichas') return responder_(renombrarFichas_());
     if (d.accion === 'listar') return responder_(listar_());
     return responder_({ ok: false, error: 'Acción no reconocida: ' + d.accion });
   } catch (err) {
@@ -94,7 +95,7 @@ function guardar_(d) {
   try {
     var h = hoja_();
     var carpeta = DriveApp.getFolderById(CARPETA_ID);
-    var nombre = 'Ficha técnica ' + inv + '.pdf';
+    var nombre = 'FICHA_' + inv + '.pdf';
     var archivo = carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(d.pdf_base64), 'application/pdf', nombre));
     var fila = filaDe_(h, inv);
     if (fila) {
@@ -128,7 +129,7 @@ function guardarVarios_(d) {
       var inv = String(f.no_inventario || '').trim();
       try {
         if (!/^\d+$/.test(inv) || !f.pdf_base64) throw new Error('Datos incompletos');
-        var nombre = 'Ficha técnica ' + inv + '.pdf';
+        var nombre = 'FICHA_' + inv + '.pdf';
         var archivo = carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(f.pdf_base64), 'application/pdf', nombre));
         var fila = [inv, nombre, archivo.getId(), archivo.getUrl(), f.origen || '', ahora];
         if (indice.hasOwnProperty(inv)) {
@@ -186,4 +187,19 @@ function guardarFotos_(d) {
       } catch (err) { return { nombre: f.nombre, ok: false, error: String(err) }; }
     }) };
   } finally { lock.releaseLock(); }
+}
+
+/** Renombra todas las fichas ya guardadas a FICHA_<No. inventario>.pdf (archivo en Drive y columna "Archivo"). */
+function renombrarFichas_() {
+  var h = hoja_(), n = h.getLastRow();
+  if (n < 2) return { ok: true, renombradas: 0 };
+  var filas = h.getRange(2, 1, n - 1, 3).getValues(), hechas = 0, errores = 0, t0 = Date.now(), faltan = false;
+  for (var i = 0; i < filas.length; i++) {
+    if (Date.now() - t0 > 240000) { faltan = true; break; }   // corta antes del límite de 6 min; se vuelve a llamar
+    var nombre = 'FICHA_' + String(filas[i][0]).trim() + '.pdf';
+    if (filas[i][1] === nombre) continue;
+    try { DriveApp.getFileById(filas[i][2]).setName(nombre); filas[i][1] = nombre; hechas++; } catch (x) { errores++; }
+  }
+  h.getRange(2, 1, filas.length, 3).setValues(filas);
+  return { ok: true, renombradas: hechas, errores: errores, faltan: faltan };
 }

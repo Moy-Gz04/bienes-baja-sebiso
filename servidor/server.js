@@ -225,7 +225,7 @@ app.get("/api/ficha/:inv/pdf", async (req, res) => {
   try { t = jwt.verify(String(req.query.t || ""), SECRETO); } catch (e) { return res.status(401).send("El enlace de la ficha venció. Vuelve a abrirla desde el sistema."); }
   if (t.proposito !== "ficha" || t.inv !== req.params.inv) return res.status(401).send("Enlace no válido.");
   const enviar = (bytes) => {
-    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="Ficha tecnica ${t.inv}.pdf"`, "Cache-Control": "private, max-age=300" });
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="FICHA_${t.inv}.pdf"`, "Cache-Control": "private, max-age=300" });
     res.send(bytes);
   };
   try {
