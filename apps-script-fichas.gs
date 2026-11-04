@@ -57,7 +57,7 @@ function responder_(obj) {
 }
 
 function doGet() {
-  return responder_({ ok: true, mensaje: 'Apps Script de fichas activo.', version: 'fichas-lotes-2026-11-03' });
+  return responder_({ ok: true, mensaje: 'Apps Script de fichas activo.', version: 'fichas-fotos-2026-11-04' });
 }
 
 function doPost(e) {
@@ -67,6 +67,7 @@ function doPost(e) {
     if (d.accion === 'guardar') return responder_(guardar_(d));
     if (d.accion === 'guardarVarios') return responder_(guardarVarios_(d));
     if (d.accion === 'obtener') return responder_(obtener_(d));
+    if (d.accion === 'guardarFotos') return responder_(guardarFotos_(d));
     if (d.accion === 'listar') return responder_(listar_());
     return responder_({ ok: false, error: 'Acción no reconocida: ' + d.accion });
   } catch (err) {
@@ -164,4 +165,25 @@ function listar_() {
   var n = h.getLastRow();
   var filas = n < 2 ? [] : h.getRange(2, 1, n - 1, 4).getDisplayValues();
   return { ok: true, fichas: filas.map(function (f) { return { no_inventario: f[0], id: f[2], url: f[3] }; }) };
+}
+
+/** { fotos: [{ nombre, jpg_base64 }] } -> guarda fotos en la subcarpeta "Fotos" (visibles con el enlace, para
+ *  que el sistema las muestre directo desde Google). Si ya existe una con el mismo nombre, se reutiliza. */
+function guardarFotos_(d) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var raiz = DriveApp.getFolderById(CARPETA_ID);
+    var it = raiz.getFoldersByName('Fotos');
+    var carpeta = it.hasNext() ? it.next() : raiz.createFolder('Fotos');
+    return { ok: true, resultados: (d.fotos || []).map(function (f) {
+      try {
+        if (!/^[a-f0-9]{24}\.jpg$/.test(f.nombre || '') || !f.jpg_base64) throw new Error('Datos incompletos');
+        var ya = carpeta.getFilesByName(f.nombre);
+        var archivo = ya.hasNext() ? ya.next() : carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(f.jpg_base64), 'image/jpeg', f.nombre));
+        archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        return { nombre: f.nombre, ok: true, id: archivo.getId() };
+      } catch (err) { return { nombre: f.nombre, ok: false, error: String(err) }; }
+    }) };
+  } finally { lock.releaseLock(); }
 }

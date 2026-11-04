@@ -42,6 +42,9 @@ sql`CREATE TABLE IF NOT EXISTS comprobaciones (
   no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, valor BOOLEAN NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar comprobaciones:", e.message));
 
+sql`CREATE TABLE IF NOT EXISTS fotos_drive (nombre TEXT PRIMARY KEY, drive_id TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("fotos_drive:", e.message));
+
 // rol "captura": solo ve los bienes sin fotos y solo puede tomarlas
 sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'completo'`.catch(e => console.error("rol:", e.message));
 
@@ -82,7 +85,7 @@ app.get("/api/bienes", sesion, async (req, res) => {
   try {
     const filas = await sql`
       SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, to_char(b.revisado_en, 'YYYY-MM-DD') AS revisado_en,
-        COALESCE((SELECT array_agg(f.ruta ORDER BY f.orden) FROM fotos f WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
+        COALESCE((SELECT array_agg(COALESCE('https://lh3.googleusercontent.com/d/' || d.drive_id || '=w1400', f.ruta || '?v=20261104') ORDER BY f.orden) FROM fotos f LEFT JOIN fotos_drive d ON d.nombre = substring(f.ruta from '[^/]+$') WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
         k.valor AS comp_valor, k.quien AS comp_quien, to_char(k.cuando, 'YYYY-MM-DD HH24:MI') AS comp_cuando,
         e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en,
         (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
@@ -94,7 +97,7 @@ app.get("/api/bienes", sesion, async (req, res) => {
       comprobado: comp_valor === null || comp_valor === undefined ? null : { valor: comp_valor, quien: comp_quien, cuando: comp_cuando },
       ...b, "revisó": reviso,
       // sin fotos de origen: se usan las tomadas en el sistema
-      fotos: b.fotos.length ? b.fotos.map(f => f + "?v=20261104") : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
+      fotos: b.fotos.length ? b.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
       fotos_capturadas: !b.fotos.length && n_capturadas > 0 ? { quien: foto_captura.split("|")[0], cuando: foto_captura.split("|")[1] } : null,
       puede_capturar_fotos: !b.fotos.length, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
       tiene_pdf: !!(pdf_drive_id || pdf), pdf_en_drive: !!pdf_drive_id,
