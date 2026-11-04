@@ -94,7 +94,7 @@ app.get("/api/bienes", sesion, async (req, res) => {
       comprobado: comp_valor === null || comp_valor === undefined ? null : { valor: comp_valor, quien: comp_quien, cuando: comp_cuando },
       ...b, "revisó": reviso,
       // sin fotos de origen: se usan las tomadas en el sistema
-      fotos: b.fotos.length ? b.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
+      fotos: b.fotos.length ? b.fotos.map(f => f + "?v=20261104") : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
       fotos_capturadas: !b.fotos.length && n_capturadas > 0 ? { quien: foto_captura.split("|")[0], cuando: foto_captura.split("|")[1] } : null,
       puede_capturar_fotos: !b.fotos.length, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
       tiene_pdf: !!(pdf_drive_id || pdf), pdf_en_drive: !!pdf_drive_id,
