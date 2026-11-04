@@ -89,10 +89,14 @@ for b in bienes.values():
 
 # Fotos
 os.makedirs(SALIDA_FOTOS, exist_ok=True)
-carpetas = sorted(os.listdir(FOTOS), key=lambda x: (len(x), x))
-for c in carpetas:
-    ruta = os.path.join(FOTOS, c)
+# Segunda carpeta de fotos (_fotos): solo se usa para los bienes que no traen fotos en RespaldoFotos
+FOTOS2 = r"C:/Users/jgome/OneDrive/Escritorio/_fotos"
+carpetas = [(FOTOS, c, "") for c in sorted(os.listdir(FOTOS), key=lambda x: (len(x), x))]
+if os.path.isdir(FOTOS2): carpetas += [(FOTOS2, c, "_fotos/") for c in sorted(os.listdir(FOTOS2), key=lambda x: (len(x), x))]
+for base, c, pref in carpetas:
+    ruta = os.path.join(base, c)
     if not os.path.isdir(ruta): continue
+    if pref and (c not in bienes or bienes[c].get("fotos") or not any(x.lower().endswith(".jpg") for x in os.listdir(ruta))): continue
     if c not in bienes:
         bienes[c] = {"no_inventario": c, "descripcion": "", "padron": "Solo fotos", "clasificacion": "Solo fotos",
                      "moi": 0, "filas": [], "avisos": ["Tiene fotos pero no aparece en el Excel de padrones."]}
@@ -108,7 +112,7 @@ for c in carpetas:
     except FileNotFoundError: origen = {}
     fotos = []
     for f in sorted((x for x in os.listdir(ruta) if x.lower().endswith(".jpg")), key=lambda x: int(re.sub(r"\D", "", x) or 0)):
-        nombre = hashlib.sha1(SAL + f"{c}/{f}".encode()).hexdigest()[:24] + ".jpg"
+        nombre = hashlib.sha1(SAL + f"{pref}{c}/{f}".encode()).hexdigest()[:24] + ".jpg"
         destino = os.path.join(SALIDA_FOTOS, nombre)
         if not os.path.exists(destino):
             im = ImageOps.exif_transpose(Image.open(os.path.join(ruta, f))).convert("RGB")
@@ -118,6 +122,7 @@ for c in carpetas:
             o = origen.get(f.rsplit(".", 1)[0]) or {}
             b["revisó"] = o.get("quien", ""); b["revisado_en"] = (o.get("cuando") or "")[:10]
     b["fotos"] = fotos
+    if pref: b["fotos_de_carpeta"] = True   # vienen de _fotos: se respetan aunque se repitan
 
 for b in bienes.values():
     b.setdefault("fotos", [])
@@ -256,7 +261,20 @@ for b in bienes.values():
         huellas.setdefault(h, []).append(b["no_inventario"])
 for grupo in (g for g in huellas.values() if len(g) > 1):
     for num in grupo:
+        if bienes[num].get("fotos_de_carpeta"): continue
         otros = ", ".join(x for x in grupo if x != num)
+        alt = os.path.join(FOTOS2, num)   # si _fotos trae las fotos de este bien, esas son las buenas
+        jpgs = sorted((x for x in os.listdir(alt) if x.lower().endswith(".jpg")), key=lambda x: int(re.sub(r"\D", "", x) or 0)) if os.path.isdir(alt) else []
+        if jpgs:
+            nuevas = []
+            for f in jpgs:
+                nombre = hashlib.sha1(SAL + f"_fotos/{num}/{f}".encode()).hexdigest()[:24] + ".jpg"
+                destino = os.path.join(SALIDA_FOTOS, nombre)
+                if not os.path.exists(destino):
+                    im = ImageOps.exif_transpose(Image.open(os.path.join(alt, f))).convert("RGB"); im.thumbnail((1400, 1400)); im.save(destino, quality=80, optimize=True)
+                nuevas.append("f/" + nombre)
+            bienes[num]["fotos"] = nuevas; bienes[num]["fotos_de_carpeta"] = True
+            continue
         bienes[num]["fotos"] = []
         bienes[num]["avisos"].append(f"Tenía las mismas fotos que el {otros}; se quitaron para volver a tomarlas.")
 
