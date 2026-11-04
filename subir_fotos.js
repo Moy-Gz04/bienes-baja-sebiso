@@ -18,16 +18,20 @@ async function llamar(cuerpo) {
   const usadas = (await sql`SELECT ruta FROM fotos`).map(r => path.basename(r.ruta)).filter(n => !ya.has(n));
   const faltan = [...new Set(usadas)];
   console.log(`${faltan.length} fotos por subir`);
-  let hechas = 0, mal = 0;
-  for (let i = 0; i < faltan.length; i += 8) {
-    const parte = faltan.slice(i, i + 8);
-    try {
-      const d = await llamar({ accion: "guardarFotos", fotos: parte.map(n => ({ nombre: n, jpg_base64: fs.readFileSync(path.join(__dirname, "public", "f", n)).toString("base64") })) });
-      for (const r of d.resultados) {
-        if (r.ok) { await sql`INSERT INTO fotos_drive (nombre, drive_id) VALUES (${r.nombre}, ${r.id}) ON CONFLICT (nombre) DO UPDATE SET drive_id = EXCLUDED.drive_id`; hechas++; }
-        else { mal++; console.error(r.nombre, r.error); }
-      }
-    } catch (e) { mal += parte.length; console.error("lote falló:", e.message); }
-    console.log(`${hechas + mal} de ${faltan.length} (${mal} con error)`);
-  }
+  let hechas = 0, mal = 0, sig = 0;
+  const LOTE = 10, HILOS = 6;   // 6 subidas al mismo tiempo, 10 fotos cada una
+  const trabajador = async () => {
+    while (sig < faltan.length) {
+      const parte = faltan.slice(sig, sig += LOTE);
+      try {
+        const d = await llamar({ accion: "guardarFotos", fotos: parte.map(n => ({ nombre: n, jpg_base64: fs.readFileSync(path.join(__dirname, "public", "f", n)).toString("base64") })) });
+        for (const r of d.resultados) {
+          if (r.ok) { await sql`INSERT INTO fotos_drive (nombre, drive_id) VALUES (${r.nombre}, ${r.id}) ON CONFLICT (nombre) DO UPDATE SET drive_id = EXCLUDED.drive_id`; hechas++; }
+          else { mal++; console.error(r.nombre, r.error); }
+        }
+      } catch (e) { mal += parte.length; console.error("lote falló:", e.message); }
+      console.log(`${hechas + mal} de ${faltan.length} (${mal} con error)`);
+    }
+  };
+  await Promise.all(Array.from({ length: HILOS }, trabajador));
 })();

@@ -168,25 +168,24 @@ function listar_() {
   return { ok: true, fichas: filas.map(function (f) { return { no_inventario: f[0], id: f[2], url: f[3] }; }) };
 }
 
-/** { fotos: [{ nombre, jpg_base64 }] } -> guarda fotos en la subcarpeta "Fotos" (visibles con el enlace, para
- *  que el sistema las muestre directo desde Google). Si ya existe una con el mismo nombre, se reutiliza. */
+/** { fotos: [{ nombre, jpg_base64 }] } -> guarda fotos en la subcarpeta "Fotos" (visibles con el enlace).
+ *  Sin candado y sin buscar repetidos: así varias subidas corren al mismo tiempo. */
 function guardarFotos_(d) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var raiz = DriveApp.getFolderById(CARPETA_ID);
-    var it = raiz.getFoldersByName('Fotos');
-    var carpeta = it.hasNext() ? it.next() : raiz.createFolder('Fotos');
-    return { ok: true, resultados: (d.fotos || []).map(function (f) {
-      try {
-        if (!/^[a-f0-9]{24}\.jpg$/.test(f.nombre || '') || !f.jpg_base64) throw new Error('Datos incompletos');
-        var ya = carpeta.getFilesByName(f.nombre);
-        var archivo = ya.hasNext() ? ya.next() : carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(f.jpg_base64), 'image/jpeg', f.nombre));
-        archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        return { nombre: f.nombre, ok: true, id: archivo.getId() };
-      } catch (err) { return { nombre: f.nombre, ok: false, error: String(err) }; }
-    }) };
-  } finally { lock.releaseLock(); }
+  var p = props_(), id = p.getProperty('FOTOS_ID'), carpeta = null;
+  if (id) { try { carpeta = DriveApp.getFolderById(id); } catch (x) { carpeta = null; } }
+  if (!carpeta) {
+    var raiz = DriveApp.getFolderById(CARPETA_ID), it = raiz.getFoldersByName('Fotos');
+    carpeta = it.hasNext() ? it.next() : raiz.createFolder('Fotos');
+    p.setProperty('FOTOS_ID', carpeta.getId());
+  }
+  return { ok: true, version: 'fotos-rapido', resultados: (d.fotos || []).map(function (f) {
+    try {
+      if (!/^[a-f0-9]{24}\.jpg$/.test(f.nombre || '') || !f.jpg_base64) throw new Error('Datos incompletos');
+      var archivo = carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(f.jpg_base64), 'image/jpeg', f.nombre));
+      archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      return { nombre: f.nombre, ok: true, id: archivo.getId() };
+    } catch (err) { return { nombre: f.nombre, ok: false, error: String(err) }; }
+  }) };
 }
 
 /** Renombra todas las fichas ya guardadas a FICHA_<No. inventario>.pdf (archivo en Drive y columna "Archivo"). */
