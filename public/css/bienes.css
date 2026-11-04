@@ -278,3 +278,12 @@ body.solo-comprobar .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
   body.solo-comprobar .b-marca{ width:46px; height:46px; font-size:21px; border:1.5px solid var(--borde); border-radius:10px; }
   body.solo-comprobar .b-marca.activa{ border-color:transparent; }
 }
+
+/* casillas de captura: cada una dice qué foto va */
+.b-capcasillas label{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+.b-cap-num{ position:absolute; top:6px; left:8px; width:22px; height:22px; border-radius:50%; background:var(--g); color:#fff; font-size:12px; display:grid; place-items:center; z-index:2; }
+.b-cap-ico{ font-size:26px; color:#B9A6AC; }
+.b-capcasillas label small{ font-size:10.5px; color:var(--txt2); text-align:center; line-height:1.2; padding:0 6px; }
+.b-capcasillas label.lista .b-cap-ico, .b-capcasillas label.lista small{ display:none; }
+.b-capcasillas label.lista span{ position:absolute; bottom:6px; left:6px; right:6px; background:rgba(47,138,91,.92); color:#fff; border-radius:6px; padding:3px 0; font-size:11.5px; text-align:center; z-index:2; }
+.b-capcasillas span::before{ content:none; } .b-cap-num, .b-cap-ico, .b-capcasillas small{ pointer-events:none; position:relative; z-index:1; } .b-cap-num{ position:absolute; }

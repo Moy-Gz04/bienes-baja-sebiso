@@ -109,6 +109,7 @@ function fichaHTML(b) {
 
 // ── Captura de las 3 fotos desde el celular (bienes sin fotos)
 const captura = { fotos: [null, null, null] };
+const TOMAS = ["Frente", "Costado", "Etiqueta"];
 function reducir(archivo) {
   return new Promise((ok, mal) => {
     const url = URL.createObjectURL(archivo), img = new Image();
@@ -133,11 +134,11 @@ function pintarCaptura() {
     casilla.classList.toggle("lista", !!f);
     casilla.querySelector("img").src = f || "";
     casilla.querySelector("img").hidden = !f;
-    casilla.querySelector("span").textContent = f ? `Foto ${i + 1} ✓` : `Tomar foto ${i + 1}`;
+    casilla.querySelector("span").textContent = f ? `${TOMAS[i]} ✓` : TOMAS[i];
   });
   const n = captura.fotos.filter(Boolean).length;
   $("bCapGuardar").disabled = n < 3;
-  $("bCapGuardar").textContent = n < 3 ? `Faltan ${3 - n} ${3 - n === 1 ? "foto" : "fotos"}` : "Guardar las 3 fotos";
+  $("bCapGuardar").textContent = n < 3 ? `Falta: ${TOMAS.filter((_, i) => !captura.fotos[i]).join(", ").toLowerCase()}` : "Guardar las 3 fotos";
 }
 async function guardarCaptura() {
   const b = estado.abierto;

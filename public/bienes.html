@@ -60,11 +60,11 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
           </div>
           <div class="b-miniaturas" id="bMiniaturas"></div>
           <div class="b-capfotos" id="bCapFotos" hidden>
-            <p>Este bien no tiene fotos. Toma 3: frente, costado y la etiqueta con el número de inventario.</p>
+            <p>Este bien no tiene fotos. Toma las 3, cada una en su cuadro; sin las 3 no se puede guardar.</p>
             <div class="b-capcasillas" id="bCapCasillas">
-              <label><input type="file" accept="image/*" capture="environment" data-i="0"><img alt="Foto 1" hidden><span>Tomar foto 1</span></label>
-              <label><input type="file" accept="image/*" capture="environment" data-i="1"><img alt="Foto 2" hidden><span>Tomar foto 2</span></label>
-              <label><input type="file" accept="image/*" capture="environment" data-i="2"><img alt="Foto 3" hidden><span>Tomar foto 3</span></label>
+              <label><input type="file" accept="image/*" capture="environment" data-i="0"><img alt="Foto 1: frente" hidden><b class="b-cap-num">1</b><i class="bi bi-square b-cap-ico" aria-hidden="true"></i><span>Frente</span><small>Todo el bien, de frente</small></label>
+              <label><input type="file" accept="image/*" capture="environment" data-i="1"><img alt="Foto 2: costado" hidden><b class="b-cap-num">2</b><i class="bi bi-layout-sidebar-inset b-cap-ico" aria-hidden="true"></i><span>Costado</span><small>Todo el bien, de lado</small></label>
+              <label><input type="file" accept="image/*" capture="environment" data-i="2"><img alt="Foto 3: etiqueta" hidden><b class="b-cap-num">3</b><i class="bi bi-upc-scan b-cap-ico" aria-hidden="true"></i><span>Etiqueta</span><small>El número de inventario, que se lea</small></label>
             </div>
             <div class="b-cappie"><span id="bCapMsg" role="status"></span><button type="button" class="tv-btn tv-btn-principal" id="bCapGuardar" disabled>Faltan 3 fotos</button></div>
           </div>
