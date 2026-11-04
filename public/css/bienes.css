@@ -287,3 +287,6 @@ body.solo-comprobar .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
 .b-capcasillas label.lista .b-cap-ico, .b-capcasillas label.lista small{ display:none; }
 .b-capcasillas label.lista span{ position:absolute; bottom:6px; left:6px; right:6px; background:rgba(47,138,91,.92); color:#fff; border-radius:6px; padding:3px 0; font-size:11.5px; text-align:center; z-index:2; }
 .b-capcasillas span::before{ content:none; } .b-cap-num, .b-cap-ico, .b-capcasillas small{ pointer-events:none; position:relative; z-index:1; } .b-cap-num{ position:absolute; }
+/* sin zoom en el teléfono: iPhone acerca la pantalla si un campo tiene letra menor a 16 px */
+html{ touch-action:manipulation; -webkit-text-size-adjust:100%; }
+@media (max-width:900px){ input, select, textarea{ font-size:16px !important; } }
