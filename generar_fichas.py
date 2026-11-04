@@ -1,7 +1,8 @@
 # Llena el formato oficial "1. Formato Ficha Técnica de Bien Mueble.xlsx" para cada bien y lo guarda en
 # fichas_xlsx/<inventario>.xlsx. Luego convertir_pdf.ps1 los pasa a PDF (public/p/...).
-# Uso: python generar_fichas.py   (después de preparar_datos.py)
-import glob, json, os
+# Uso: python generar_fichas.py [lista.json]   (después de preparar_datos.py)
+#   lista.json opcional: un pdfs json parcial {inventario: ruta_pdf} o una lista de inventarios; solo genera esos.
+import glob, json, os, sys
 import openpyxl
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
@@ -14,6 +15,9 @@ FORMATO = glob.glob(r"C:/Users/jgome/OneDrive/Escritorio/1. Formato*Ficha*Bien M
 SALIDA = os.path.join(AQUI, "fichas_xlsx")
 os.makedirs(SALIDA, exist_ok=True)
 bienes = json.load(open(os.path.join(AQUI, "data", "bienes.json"), encoding="utf-8"))
+if len(sys.argv) > 1:
+    solo = set(json.load(open(sys.argv[1], encoding="utf-8")))
+    bienes = [b for b in bienes if b["no_inventario"] in solo]
 
 def fecha(f):
     return "/".join(reversed(f.split("-"))) if f else ""

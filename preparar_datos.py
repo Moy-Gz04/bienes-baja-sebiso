@@ -128,10 +128,28 @@ FICHAS = r"C:/Users/jgome/OneDrive/Escritorio/Fichas"
 SALIDA_FICHAS = os.path.join(AQUI, "public", "x")
 os.makedirs(SALIDA_FICHAS, exist_ok=True)
 import shutil
-sin_bien = []
-for f in sorted(os.listdir(FICHAS)):
+# Segunda carpeta: "Encontradas" (fichas de bienes que no tenían ficha/fotos). Sus 3 fotos incrustadas se usan
+# como fotos del bien solo si el bien no tiene fotos propias (se descarta el logo de la esquina K1).
+ENCONTRADAS = r"C:/Users/jgome/OneDrive/Escritorio/Encontradas"
+import io
+def fotos_de_ficha(ws, num):
+    rutas = []
+    imgs = sorted((i for i in ws._images if not (i.anchor._from.col >= 10 and i.anchor._from.row <= 1)),
+                  key=lambda i: (i.anchor._from.row, i.anchor._from.col))
+    for k, img in enumerate(imgs, start=1):
+        nombre = hashlib.sha1(SAL + f"encontradas/{num}/{k}".encode()).hexdigest()[:24] + ".jpg"
+        destino = os.path.join(SALIDA_FOTOS, nombre)
+        if not os.path.exists(destino):
+            im = ImageOps.exif_transpose(Image.open(io.BytesIO(img._data()))).convert("RGB")
+            im.thumbnail((1400, 1400)); im.save(destino, quality=80, optimize=True)
+        rutas.append("f/" + nombre)
+    return rutas
+sin_bien, fotos_ficha = [], []
+archivos = [(FICHAS, f) for f in sorted(os.listdir(FICHAS))]
+if os.path.isdir(ENCONTRADAS): archivos += [(ENCONTRADAS, f) for f in sorted(os.listdir(ENCONTRADAS))]
+for carpeta, f in archivos:
     if not f.lower().endswith(".xlsx"): continue
-    ws = openpyxl.load_workbook(os.path.join(FICHAS, f), data_only=True).active
+    ws = openpyxl.load_workbook(os.path.join(carpeta, f), data_only=True).active
     d = {texto(ws.cell(2, i).value): ws.cell(3, i).value for i in range(1, 13)}
     d.update({texto(ws.cell(5, i).value): ws.cell(6, i).value for i in range(1, 8)})
     num = texto(d.get("NUMERO DE INVENTARIO")) or f[:-5]
@@ -139,6 +157,8 @@ for f in sorted(os.listdir(FICHAS)):
     b = bienes[num]
     nombre = hashlib.sha1(SAL + f"ficha/{num}".encode()).hexdigest()[:24] + ".xlsx"
     b["ficha"] = True
+    if carpeta == ENCONTRADAS and not b.get("fotos"):
+        b["fotos"] = fotos_de_ficha(ws, num); fotos_ficha.append(num)
     b["material"] = texto(d.get("MATERIAL")); b["color"] = texto(d.get("COLOR"))
     b["ubicacion"] = texto(d.get("UBICACIÓN"))
     b["estado_ficha"] = CONDICION.get(texto(d.get("ESTADO FÍSICO Y OPERATIVO DEL BIEN")), "")
@@ -148,7 +168,7 @@ for f in sorted(os.listdir(FICHAS)):
         b["avisos"].append(f"La ficha técnica dice estado {b['estado_ficha']} y el padrón dice {b['estado_fisico']}.")
     if b["estado_ficha"] and b.get("condicion_foto") and b["estado_ficha"] != b["condicion_foto"]:
         b["avisos"].append(f"La ficha técnica dice estado {b['estado_ficha']} y la revisión de fotos dice {b['condicion_foto']}.")
-print(f"fichas: {sum(1 for b in bienes.values() if b.get('ficha'))}, sin bien en el sistema: {sin_bien}")
+print(f"fichas: {sum(1 for b in bienes.values() if b.get('ficha'))}, sin bien en el sistema: {sin_bien}, con fotos tomadas de la ficha: {len(fotos_ficha)}")
 
 # PDF de la ficha técnica con el formato oficial (lo generan generar_fichas.py + convertir_pdf.ps1)
 for b in bienes.values():

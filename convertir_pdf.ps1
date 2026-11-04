@@ -1,6 +1,9 @@
 # Convierte fichas_xlsx\*.xlsx a PDF con Excel (public\p\<nombre aleatorio>.pdf según data\pdfs.json)
+# Uso: convertir_pdf.ps1 [ruta a un pdfs json parcial]  (por omisión data\pdfs.json)
+param([string]$Ruta = "")
 $aqui = Split-Path -Parent $MyInvocation.MyCommand.Path
-$mapa = Get-Content (Join-Path $aqui "data\pdfs.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+if (-not $Ruta) { $Ruta = Join-Path $aqui "data\pdfs.json" }
+$mapa = Get-Content $Ruta -Raw -Encoding UTF8 | ConvertFrom-Json
 New-Item -ItemType Directory -Force (Join-Path $aqui "public\p") | Out-Null
 $x = New-Object -ComObject Excel.Application; $x.DisplayAlerts = $false; $x.ScreenUpdating = $false
 $n = 0
