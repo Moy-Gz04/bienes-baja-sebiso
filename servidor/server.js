@@ -37,6 +37,11 @@ sql`CREATE TABLE IF NOT EXISTS fotos_capturadas (
   imagen BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (no_inventario, orden))`
   .catch(e => console.error("No se pudo preparar fotos_capturadas:", e.message));
 
+// Comprobación física de cada bien: palomita (sí) o equis (no)
+sql`CREATE TABLE IF NOT EXISTS comprobaciones (
+  no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, valor BOOLEAN NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("No se pudo preparar comprobaciones:", e.message));
+
 // rol "captura": solo ve los bienes sin fotos y solo puede tomarlas
 sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'completo'`.catch(e => console.error("rol:", e.message));
 
@@ -77,13 +82,15 @@ app.get("/api/bienes", sesion, async (req, res) => {
     const filas = await sql`
       SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, to_char(b.revisado_en, 'YYYY-MM-DD') AS revisado_en,
         COALESCE((SELECT array_agg(f.ruta ORDER BY f.orden) FROM fotos f WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
+        k.valor AS comp_valor, k.quien AS comp_quien, to_char(k.cuando, 'YYYY-MM-DD HH24:MI') AS comp_cuando,
         e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en,
         (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
         (SELECT max(c.quien || '|' || to_char(c.cuando, 'YYYY-MM-DD')) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario) AS foto_captura
-      FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario)
+      FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN comprobaciones k USING (no_inventario)
       ORDER BY length(b.no_inventario), b.no_inventario`;
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
-    const bienes = filas.map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, n_capturadas, foto_captura, ...b }) => ({
+    const bienes = filas.map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, n_capturadas, foto_captura, comp_valor, comp_quien, comp_cuando, ...b }) => ({
+      comprobado: comp_valor === null || comp_valor === undefined ? null : { valor: comp_valor, quien: comp_quien, cuando: comp_cuando },
       ...b, "revisó": reviso,
       // sin fotos de origen: se usan las tomadas en el sistema
       fotos: b.fotos.length ? b.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
@@ -120,6 +127,22 @@ app.post("/api/estatus", sesion, async (req, res) => {
       RETURNING clasificacion, quien, cuando`;
     res.json({ ok: true, estatus: { ...e, cuando: new Date(e.cuando).toISOString() } });
   } catch (e) { fallo(res, e, "No se pudo guardar el estatus."); }
+});
+
+// ── Marcar un bien como comprobado (true = palomita, false = equis, null = quitar la marca)
+app.post("/api/comprobado", sesion, async (req, res) => {
+  if (req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
+  try {
+    const inv = String(req.body?.no_inventario || ""), valor = req.body?.valor;
+    const [b] = await sql`SELECT 1 FROM bienes WHERE no_inventario = ${inv}`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: "Ese bien no existe." });
+    if (valor === null) { await sql`DELETE FROM comprobaciones WHERE no_inventario = ${inv}`; return res.json({ ok: true, comprobado: null }); }
+    if (typeof valor !== "boolean") return res.status(400).json({ ok: false, mensaje: "Marca palomita o equis." });
+    const [k] = await sql`INSERT INTO comprobaciones (no_inventario, valor, quien) VALUES (${inv}, ${valor}, ${req.usuario.usuario || "—"})
+      ON CONFLICT (no_inventario) DO UPDATE SET valor = EXCLUDED.valor, quien = EXCLUDED.quien, cuando = now()
+      RETURNING valor, quien, to_char(cuando, 'YYYY-MM-DD HH24:MI') AS cuando`;
+    res.json({ ok: true, comprobado: k });
+  } catch (e) { fallo(res, e, "No se pudo guardar la comprobación."); }
 });
 
 // ── Captura de las 3 fotos de un bien que no tenía (desde el celular). Se pueden volver a tomar.

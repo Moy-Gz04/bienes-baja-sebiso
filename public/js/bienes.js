@@ -36,6 +36,24 @@ function pintarGrupos() {
   }).join("");
 }
 
+function comprobacion(b) {
+  const v = b.comprobado ? b.comprobado.valor : null, t = b.comprobado ? ` · ${b.comprobado.quien} ${b.comprobado.cuando}` : "";
+  return `<span class="b-marcas"><button type="button" class="b-marca si${v === true ? " activa" : ""}" data-comp="si" title="Comprobado${v === true ? t : ""}" aria-label="Marcar ${esc(b.no_inventario)} como comprobado" aria-pressed="${v === true}"><i class="bi bi-check-lg"></i></button><button type="button" class="b-marca no${v === false ? " activa" : ""}" data-comp="no" title="No comprobado${v === false ? t : ""}" aria-label="Marcar ${esc(b.no_inventario)} como no comprobado" aria-pressed="${v === false}"><i class="bi bi-x-lg"></i></button></span>`;
+}
+
+async function marcarComprobado(inv, cual) {
+  const b = BIENES.find(x => x.no_inventario === inv); if (!b) return;
+  const actual = b.comprobado ? b.comprobado.valor : null, nuevo = cual === "si";
+  const valor = actual === nuevo ? null : nuevo;
+  const texto = valor === null ? `¿Quitar la marca de comprobación del bien ${inv}?` : `¿Marcar el bien ${inv} como ${valor ? "COMPROBADO ✓" : "NO COMPROBADO ✗"}?`;
+  if (!confirm(texto)) return;
+  const r = await fetch("/api/comprobado", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ no_inventario: inv, valor }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) return alert(j.mensaje || "No se pudo guardar la comprobación.");
+  b.comprobado = j.comprobado;
+  const celda = document.querySelector(`tr[data-inv="${CSS.escape(inv)}"] .b-comp`); if (celda) celda.innerHTML = comprobacion(b);
+}
+
 function pintar() {
   const lista = filtrados();
   estado.vista = lista;
@@ -47,7 +65,8 @@ function pintar() {
       <td class="b-c">${estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "—"}</td>
       <td class="b-d">${pesos(b.moi)}</td>
       <td class="b-c"><button type="button" class="p-icono b-ver" title="Ver ficha técnica" aria-label="Ver ficha técnica del ${esc(b.no_inventario)}"><i class="bi bi-file-earmark-text"></i></button></td>
-    </tr>`).join("") || `<tr><td colspan="7" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
+      ${SOLO_CAPTURA ? "" : `<td class="b-c b-comp">${comprobacion(b)}</td>`}
+    </tr>`).join("") || `<tr><td colspan="8" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
   $("bConteo").textContent = `${lista.length.toLocaleString("es-MX")} ${lista.length === 1 ? "bien" : "bienes"}`;
   const total = lista.reduce((s, b) => s + (b.moi || 0), 0);
   $("bResumen").innerHTML = `<span><b>${lista.length.toLocaleString("es-MX")}</b> bienes</span><span><b>${pesos(total)}</b> valor M.O.I.</span><span><b>${lista.filter(b => b.fotos.length).length.toLocaleString("es-MX")}</b> con fotos</span><span><b>${lista.filter(b => b.ficha).length.toLocaleString("es-MX")}</b> con ficha previa</span>`;
@@ -273,7 +292,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const respuesta = await r.json();
   BIENES = respuesta.bienes;
   if (respuesta.rol === "captura") {
-    SOLO_CAPTURA = true; GRUPOS = GRUPOS_CAPTURA; estado.grupo = "Faltan fotos";
+    SOLO_CAPTURA = true; document.querySelector(".b-comp-th")?.remove(); GRUPOS = GRUPOS_CAPTURA; estado.grupo = "Faltan fotos";
     document.body.classList.add("solo-captura");
     document.querySelector(".tv-eyebrow").textContent = "Captura de fotos";
     document.querySelector(".tv-cabeza h1").textContent = "Bienes sin fotos";
@@ -287,7 +306,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     estado.grupo = g.dataset.grupo; pintarGrupos(); pintar();
   });
   ["bBuscar", "bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", pintar));
-  $("bCuerpo").addEventListener("click", (e) => { const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
+  $("bCuerpo").addEventListener("click", (e) => { const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
   $("bMiniaturas").addEventListener("click", (e) => { const m = e.target.closest("button"); if (m) { estado.foto = +m.dataset.i; mostrarFoto(); } });
   const mover = (d) => { const n = estado.abierto.fotos.length; if (n) { estado.foto = (estado.foto + d + n) % n; mostrarFoto(); } };
   $("bFotoAnt").addEventListener("click", () => mover(-1));

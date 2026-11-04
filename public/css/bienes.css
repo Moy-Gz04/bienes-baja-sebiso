@@ -253,3 +253,15 @@ dialog.tv-dialogo{ overscroll-behavior:contain; }
   .b-x{ position:fixed; top:calc(10px + env(safe-area-inset-top)); right:10px; width:42px; height:42px; }
   .b-dialogo form{ padding-top:58px; }
 }
+
+/* Comprobado: palomita / equis */
+.b-marcas{ display:inline-flex; gap:6px; }
+.b-marca{ width:32px; height:32px; border-radius:8px; border:1.5px solid var(--borde); background:transparent; color:#9A8A90; display:inline-grid; place-items:center; cursor:pointer; font-size:15px; transition:background .15s, color .15s, border-color .15s; }
+.b-marca:hover{ border-color:currentColor; }
+.b-marca:focus-visible{ outline:2px solid #7B1E3A; outline-offset:2px; }
+.b-marca.si:hover, .b-marca.si.activa{ color:#2F8A5B; } .b-marca.si.activa{ background:#E3F3EA; border-color:#2F8A5B; }
+.b-marca.no:hover, .b-marca.no.activa{ color:#B3261E; } .b-marca.no.activa{ background:#FBE4E2; border-color:#B3261E; }
+@media (max-width:900px){
+  #bTabla tr{ grid-template-areas:"foto num moi" "foto desc desc" "foto clas est" "foto comp comp"; }
+  #bTabla td:nth-child(8){ grid-area:comp; padding-top:4px; }
+}
