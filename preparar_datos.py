@@ -219,7 +219,7 @@ if os.path.exists(REUBICACION):
         t = t.upper()
         return "DIF PATRONATO" if "PATRONATO" in t else "DIF ASISTENCIA" if "ASISTENCIA" in t else "DIF NIÑEZ" if "ADOLESCENCIA" in t or "NIÑEZ" in t else ""
     wsr = openpyxl.load_workbook(REUBICACION, data_only=True)["LISTADO DEL PADRON"]
-    encr = [texto(c.value) for c in wsr[4]]
+    encr = [texto(c.value) for c in wsr[4]]; en_listado = set()
     for fila in wsr.iter_rows(min_row=5, values_only=True):
         d = dict(zip(encr, fila)); num = texto(d.get("NUMERO DE INVENTARIO"))
         if not num: continue
@@ -238,7 +238,13 @@ if os.path.exists(REUBICACION):
             if num not in cambios_reub["agregados"]: cambios_reub["cambio_estatus"].append([num, b["clasificacion"]])
             b["clasificacion"] = "Propuesta DIF"
         elif (b.get("propuesta_dif") or "") != area: cambios_reub["cambio_area"].append([num, b.get("propuesta_dif"), area])
-        b["propuesta_dif"] = area; b.pop("pendiente", None)
+        b["propuesta_dif"] = area; b.pop("pendiente", None); en_listado.add(num)
+    # Solo los bienes del listado quedan en DIF; los demás que estaban en DIF pasan a Pendiente de estatus
+    cambios_reub["a_pendiente"] = []
+    for b in bienes.values():
+        if b["clasificacion"] == "Propuesta DIF" and b["no_inventario"] not in en_listado:
+            b["pendiente"] = "Estaba en Propuesta DIF pero no viene en la propuesta final de reubicación DIF."
+            b["propuesta_dif"] = ""; cambios_reub["a_pendiente"].append(b["no_inventario"])
     json.dump(cambios_reub, open(os.path.join(AQUI, "data", "reubicacion_cambios.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"reubicación DIF: {len(cambios_reub['agregados'])} agregados, {len(cambios_reub['cambio_estatus'])} cambian a Propuesta DIF, {len(cambios_reub['cambio_area'])} solo cambian de área")
 
