@@ -18,6 +18,7 @@ try {
   process.on("exit", () => { try { fs.unlinkSync(CANDADO); } catch (e) { /* ya no estaba */ } });
 } catch (e) { /* sin candado se sigue igual */ }
 const todas = process.argv.includes("--todas");
+const soloGeneradas = process.argv.includes("--generadas");   // solo las fichas del formato oficial (p/), no las escaneadas
 
 async function llamar(cuerpo) {
   for (let intento = 1; intento <= 3; intento++) {
@@ -35,14 +36,14 @@ async function llamar(cuerpo) {
 
 (async () => {
   await sql`ALTER TABLE bienes ADD COLUMN IF NOT EXISTS pdf_drive_id TEXT`;
-  const filas = todas ? await sql`SELECT no_inventario, pdf FROM bienes WHERE pdf IS NOT NULL ORDER BY no_inventario`
+  const filas = todas ? await sql`SELECT no_inventario, pdf FROM bienes WHERE pdf IS NOT NULL AND (${!soloGeneradas} OR pdf LIKE 'p/%') ORDER BY no_inventario`
     : await sql`SELECT no_inventario, pdf FROM bienes WHERE pdf IS NOT NULL AND pdf_drive_id IS NULL ORDER BY no_inventario`;
   console.log(`${filas.length} fichas por subir`);
   let bien = 0; const fallas = [];
   const origen = (f) => (f.pdf.startsWith("q/") ? "FT-PAG Nueva (escaneada)" : "Formato oficial generado");
   const listas = filas.filter(f => fs.existsSync(path.join(__dirname, "public", f.pdf)) || (fallas.push(`${f.no_inventario}: no existe ${f.pdf}`), false));
   // Lotes: el Apps Script guarda varias fichas en una sola ejecución (acción guardarVarios)
-  const LOTE = 20;
+  const LOTE = 8;
   let porLotes = true;
   for (let i = 0; i < listas.length; ) {
     const parte = porLotes ? listas.slice(i, i + LOTE) : [listas[i]];
