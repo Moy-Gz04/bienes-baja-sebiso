@@ -23,8 +23,9 @@ body.con-encabezado-sistemas::before{ display:none; }
 .b-tabla{ overflow:visible; }
 #bTabla{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; }
 #bTabla th{ background:var(--g); color:#fff; text-align:left; padding:8px; font-size:11.5px; }
-#bTabla th:nth-child(1){ width:62px; } #bTabla th:nth-child(2){ width:118px; } #bTabla th:nth-child(4){ width:170px; }
-#bTabla th:nth-child(5){ width:96px; } #bTabla th:nth-child(6){ width:110px; } #bTabla th:nth-child(7){ width:62px; }
+#bTabla th:nth-child(1){ width:60px; } #bTabla th:nth-child(2){ width:92px; } #bTabla th:nth-child(4){ width:178px; }
+#bTabla th:nth-child(5){ width:92px; } #bTabla th:nth-child(6){ width:104px; } #bTabla th:nth-child(7){ width:52px; } #bTabla th:nth-child(8){ width:96px; }
+#bTabla th{ font-weight:700; letter-spacing:.02em; vertical-align:middle; }
 #bTabla td{ height:52px; padding:4px 8px; border-bottom:1px solid #F1EAE1; line-height:1.25; }
 #bTabla tbody tr[data-inv]{ cursor:pointer; }
 #bTabla tbody tr:nth-child(even) td{ background:#FDFBF8; }
@@ -254,13 +255,12 @@ dialog.tv-dialogo{ overscroll-behavior:contain; }
   .b-dialogo form{ padding-top:58px; }
 }
 
-/* Comprobado: palomita / equis */
-.b-marcas{ display:inline-flex; gap:6px; }
-.b-marca{ width:32px; height:32px; border-radius:8px; border:1.5px solid var(--borde); background:transparent; color:#9A8A90; display:inline-grid; place-items:center; cursor:pointer; font-size:15px; transition:background .15s, color .15s, border-color .15s; }
-.b-marca:hover{ border-color:currentColor; }
-.b-marca:focus-visible{ outline:2px solid #7B1E3A; outline-offset:2px; }
-.b-marca.si:hover, .b-marca.si.activa{ color:#2F8A5B; } .b-marca.si.activa{ background:#E3F3EA; border-color:#2F8A5B; }
-.b-marca.no:hover, .b-marca.no.activa{ color:#B3261E; } .b-marca.no.activa{ background:#FBE4E2; border-color:#B3261E; }
+/* Comprobado: palomita / equis, discretas hasta que se marcan */
+.b-marcas{ display:inline-flex; gap:2px; }
+.b-marca{ width:30px; height:30px; border:0; border-radius:6px; background:transparent; color:#C4B6BA; display:inline-grid; place-items:center; cursor:pointer; font-size:16px; transition:background .12s, color .12s; }
+.b-marca:focus-visible{ outline:2px solid var(--g); outline-offset:1px; }
+.b-marca.si:hover{ color:#2F8A5B; background:#EEF6F1; } .b-marca.no:hover{ color:#B3261E; background:#FBEDEC; }
+.b-marca.si.activa{ color:#fff; background:#2F8A5B; } .b-marca.no.activa{ color:#fff; background:#B3261E; }
 @media (max-width:900px){
   #bTabla tr{ grid-template-areas:"foto num moi" "foto desc desc" "foto clas est" "foto comp comp"; }
   #bTabla td:nth-child(8){ grid-area:comp; padding-top:4px; }

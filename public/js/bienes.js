@@ -45,8 +45,17 @@ async function marcarComprobado(inv, cual) {
   const b = BIENES.find(x => x.no_inventario === inv); if (!b) return;
   const actual = b.comprobado ? b.comprobado.valor : null, nuevo = cual === "si";
   const valor = actual === nuevo ? null : nuevo;
-  const texto = valor === null ? `¿Quitar la marca de comprobación del bien ${inv}?` : `¿Marcar el bien ${inv} como ${valor ? "COMPROBADO ✓" : "NO COMPROBADO ✗"}?`;
-  if (!confirm(texto)) return;
+  const desc = [b.descripcion, b.marca && b.marca !== "SIN MARCA" ? b.marca : ""].filter(Boolean).join(" · ");
+  const op = valor === null
+    ? { titulo: "Quitar marca", pregunta: `¿Le quito la marca de comprobación al bien ${inv}?`, btnOk: "Sí, quitarla", iconoOk: "ti-eraser", textoOk: "Le quito la marca…" }
+    : valor
+      ? { titulo: "Comprobado", pregunta: `¿Marco el bien ${inv} como comprobado?`, btnOk: "Sí, comprobado", iconoOk: "ti-check", textoOk: "Lo marco como comprobado…", estiloOk: "dorado" }
+      : { titulo: "No comprobado", pregunta: `¿Marco el bien ${inv} como NO comprobado?`, btnOk: "Sí, no comprobado", iconoOk: "ti-x", textoOk: "Lo marco como no comprobado…" };
+  const M = window.MiniSEBISO;
+  const si = M && M.preguntar && !M.apagado
+    ? await M.preguntar({ ...op, detalle: desc, btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Lo dejamos como está." })
+    : confirm(op.pregunta);
+  if (!si) return;
   const r = await fetch("/api/comprobado", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ no_inventario: inv, valor }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.ok) return alert(j.mensaje || "No se pudo guardar la comprobación.");
