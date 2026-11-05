@@ -49,6 +49,9 @@ function fichaPdf(bien, fotos) {
     const doc = new PDFDocument({ size: "LETTER", layout: "landscape", margin: 0, info: { Title: `Ficha técnica ${bien.no_inventario}` } });
     const partes = [];
     doc.on("data", (p) => partes.push(p)); doc.on("end", () => ok(Buffer.concat(partes))); doc.on("error", mal);
+    // el formato oficial llega a 790.7 pt de 792: se escala para dejar 36 pt de margen a cada lado
+    const MARGEN = 36, k = (792 - 2 * MARGEN) / (X1 - X0);
+    doc.transform(k, 0, 0, k, MARGEN - X0 * k, 54.4 * (1 - k));
 
     // encabezado
     doc.lineWidth(0.6).strokeColor("#000").rect(X0, 54.4, X1 - X0, 26.4).stroke();
