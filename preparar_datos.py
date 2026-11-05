@@ -288,6 +288,20 @@ for d in json.load(open(os.path.join(AQUI, "data", "agregados_doc.json"), encodi
                    "pendiente": "Mostrado físicamente y no relacionado en los padrones: falta capturar su estatus."}
     orden.append(num)
 
+# Fotos sueltas identificadas por su etiqueta (data/fotos_extra.json): solo para bienes que siguen sin fotos
+_extra = os.path.join(AQUI, "data", "fotos_extra.json")
+if os.path.exists(_extra):
+    for num, rutas in json.load(open(_extra, encoding="utf-8")).items():
+        if num not in bienes or bienes[num].get("fotos"): continue
+        nuevas = []
+        for r in rutas:
+            nombre = hashlib.sha1(SAL + f"extra/{num}/{os.path.basename(r)}".encode()).hexdigest()[:24] + ".jpg"
+            destino = os.path.join(SALIDA_FOTOS, nombre)
+            if not os.path.exists(destino):
+                im = ImageOps.exif_transpose(Image.open(r)).convert("RGB"); im.thumbnail((1400, 1400)); im.save(destino, quality=80, optimize=True)
+            nuevas.append("f/" + nombre)
+        bienes[num]["fotos"] = nuevas
+
 lista = [bienes[n] for n in orden]
 json.dump(lista, open(os.path.join(AQUI, "data", "bienes.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
 total_filas = sum(len(b["filas"]) for b in lista)
