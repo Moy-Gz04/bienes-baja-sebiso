@@ -63,11 +63,16 @@ function fichaPdf(bien, fotos) {
     // memoria fotográfica
     doc.rect(X0, 273, X1 - X0, 11.2).stroke();
     celda(doc, "MEMORIA FOTOGRÁFICA", X0, 273, X1 - X0, 11.2, { fuente: "Helvetica-Bold", tam: 7.2 });
-    const anchoCaja = (X1 - X0) / 3, yF = 294, hF = 152;
+    // cada foto se recorta a un cuadro fijo igual para las tres
+    const anchoCaja = (X1 - X0) / 3, yF = 294, hF = 152, wF = Math.min(anchoCaja - 16, 200);
     fotos.slice(0, 3).forEach((f, i) => {
       if (!f) return;
-      try { doc.image(f, X0 + i * anchoCaja + 5, yF, { fit: [anchoCaja - 10, hF], align: "center", valign: "center" }); }
-      catch (e) { /* formato no soportado: se deja el hueco */ }
+      const xF = X0 + i * anchoCaja + (anchoCaja - wF) / 2;
+      try {
+        doc.save().rect(xF, yF, wF, hF).clip();
+        doc.image(f, xF, yF, { cover: [wF, hF], align: "center", valign: "center" });
+        doc.restore();
+      } catch (e) { doc.restore(); /* formato no soportado: se deja el hueco */ }
     });
 
     // firmas
