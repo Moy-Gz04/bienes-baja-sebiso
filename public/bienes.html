@@ -89,6 +89,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
             <button type="button" class="tv-btn" id="bSiguienteBien"><i class="bi bi-arrow-right"></i></button>
             <span class="b-hueco"></span>
             <a class="tv-btn" id="bDescargar" href="#"><i class="bi bi-download"></i> PDF</a>
+            <button type="button" class="tv-btn" id="bCompletar" hidden><i class="bi bi-pencil-square"></i> Completar datos de la ficha</button>
             <button type="button" class="tv-btn" id="bImprimir"><i class="bi bi-file-earmark-pdf"></i> Ver ficha técnica</button>
             <button class="tv-btn tv-btn-principal">Cerrar</button>
           </div>
@@ -103,6 +104,18 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
       <button type="button" class="tv-btn tv-btn-principal" id="bGrafCerrar">Cerrar</button></div>
     <div class="b-graf-cuerpo" id="bGrafCuerpo"></div>
     <div class="b-tip" id="bTip" role="tooltip" hidden></div>
+  </dialog>
+
+  <dialog class="tv-dialogo b-datosdlg" id="bDatosDlg" aria-labelledby="bDatosTitulo">
+    <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    <form id="bDatosForm" novalidate>
+      <div class="b-pdf-cabeza"><h2 id="bDatosTitulo">Completar datos de la ficha</h2></div>
+      <p class="b-datos-ayuda">Los campos marcados <span class="b-falta-eti">Falta</span> salen con “-” en la ficha. Al guardar se vuelve a generar la ficha en PDF.</p>
+      <div class="b-campos" id="bCampos"></div>
+      <div class="tv-dialogo-acc b-datos-pie"><span id="bDatosMsg" role="status"></span><span class="b-hueco"></span>
+        <button type="button" class="tv-btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="tv-btn tv-btn-principal" id="bDatosGuardar"><i class="bi bi-check-lg"></i> Guardar y generar ficha</button></div>
+    </form>
   </dialog>
 
   <dialog class="tv-dialogo b-pdf" id="bPdf" aria-labelledby="bPdfTitulo">

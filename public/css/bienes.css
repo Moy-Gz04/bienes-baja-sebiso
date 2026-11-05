@@ -290,3 +290,21 @@ body.solo-comprobar .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
 /* sin zoom en el teléfono: iPhone acerca la pantalla si un campo tiene letra menor a 16 px */
 html{ touch-action:manipulation; -webkit-text-size-adjust:100%; }
 @media (max-width:900px){ input, select, textarea{ font-size:16px !important; } }
+
+/* completar datos de la ficha */
+.b-datosdlg{ width:min(900px,96vw); max-height:94vh; overflow:hidden; }
+.b-datosdlg form{ display:flex; flex-direction:column; max-height:94vh; }
+.b-datos-ayuda{ margin:8px 16px 0; font-size:11.5px; color:var(--txt2); }
+.b-falta-eti{ display:inline-block; padding:0 6px; border-radius:6px; background:var(--baja-f); color:var(--baja); font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; }
+.b-campos{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px 12px; padding:10px 16px; overflow:auto; }
+.b-campos label{ display:flex; flex-direction:column; gap:2px; min-width:0; font-size:10px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--txt2); }
+.b-campos label > span{ display:flex; align-items:center; gap:6px; }
+.b-campos input{ min-width:0; padding:6px 9px; border:1.5px solid var(--borde); border-radius:9px; background:#fff; color:var(--txt); font:500 12.5px 'Montserrat',sans-serif; text-transform:none; letter-spacing:0; }
+.b-campos input:focus{ outline:0; border-color:var(--g); box-shadow:0 0 0 3px rgba(95,33,50,.1); }
+.b-campos label.falta input{ border-color:var(--baja); background:var(--baja-f); }
+.b-campos label.cambiado input{ border-color:var(--reap); }
+.b-campos .a2{ grid-column:span 2; }
+.b-datos-pie{ display:flex; align-items:center; gap:8px; padding:10px 16px; border-top:1px solid var(--borde); font-size:11.5px; font-weight:600; color:var(--txt2); }
+.b-nota-gen{ background:var(--foto-f); color:var(--foto); margin-top:6px; }
+.b-nota-gen.lista{ background:var(--reap-f); color:var(--reap); } .b-nota-gen.error{ background:var(--baja-f); color:var(--baja); }
+@media (max-width:900px){ .b-campos{ grid-template-columns:repeat(2,minmax(0,1fr)); } .b-campos .a2{ grid-column:1 / -1; } .b-datosdlg{ width:100vw; max-width:100vw; height:100dvh; max-height:100dvh; margin:0; border-radius:0; } .b-datosdlg form{ max-height:100dvh; height:100%; } }

@@ -91,6 +91,7 @@ const DATOS = [
   ["M.O.I.", (b) => pesos(b.moi)], ["Fecha de adquisición", (b) => fecha(b.fecha_adquisicion)], ["Estado físico (padrón)", "estado_fisico"],
   ["Estado en ficha técnica", "estado_ficha"], ["Condición en fotos", "condicion_foto"], ["Revisó", (b) => [b["revisó"], fecha(b.revisado_en)].filter(Boolean).join(" · ")], ["Propuesta DIF", "propuesta_dif"],
   ["Clasificación en el padrón", "clasificacion_padron"], ["Clasificación en la App", "app_clasificacion"], ["Estatus capturado", (b) => b.estatus_capturado ? `${b.estatus_capturado.quien} · ${fecha(b.estatus_capturado.cuando.slice(0, 10))}` : ""],
+  ["Datos de ficha completados", (b) => b.datos_completados ? `${b.datos_completados.quien} · ${b.datos_completados.cuando}` : ""],
   ["Fotos tomadas en el sistema", (b) => b.fotos_capturadas ? `${b.fotos_capturadas.quien} · ${fecha(b.fotos_capturadas.cuando)}` : ""],
   ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"],
   ["Edificio", "edificio", 3], ["Folio fiscal", "folio_fiscal", 3],
@@ -103,8 +104,65 @@ const DATOS_CAPTURA = [["No. inventario", "no_inventario"], ["Marca", "marca"], 
 function fichaHTML(b) {
   return `<dl class="b-datos">${(SOLO_CAPTURA ? DATOS_CAPTURA : DATOS).map(([t, c, ancho]) => `<div${ancho ? ` class="a${ancho}"` : ""}><dt>${t}</dt><dd>${esc(valor(b, c)) || "—"}</dd></div>`).join("")}</dl>
     ${b.caracteristicas ? `<p class="b-texto"><b>Características</b>${esc(b.caracteristicas)}</p>` : ""}
+    ${avisoFicha(b)}
     ${b.pendiente && !b.estatus_capturado ? `<p class="b-nota b-nota-pend"><i class="bi bi-exclamation-triangle"></i> ${esc(b.pendiente)}</p>` : ""}
 `;
+}
+
+// ── Ficha generada en el servidor (al completar datos o tomar fotos)
+function avisoFicha(b) {
+  const g = b.ficha_generando;
+  if (!g || SOLO_COMPROBAR) return "";
+  if (g.estado === "generando") return `<p class="b-nota b-nota-gen" role="status"><i class="bi bi-hourglass-split"></i> Generando ficha… (se sube a Drive en unos segundos)</p>`;
+  if (g.estado === "lista") return `<p class="b-nota b-nota-gen lista" role="status"><i class="bi bi-check-circle"></i> La ficha ya está generada y en Drive.</p>`;
+  return `<p class="b-nota b-nota-gen error" role="status"><i class="bi bi-exclamation-triangle"></i> No se pudo generar la ficha: ${esc(g.error || "")}</p>`;
+}
+const vigilando = new Set();
+async function vigilarFicha(b) {
+  if (vigilando.has(b.no_inventario)) return;
+  vigilando.add(b.no_inventario);
+  try {
+    for (let i = 0; i < 60 && b.ficha_generando && b.ficha_generando.estado === "generando"; i++) {
+      await new Promise(r => setTimeout(r, 4000));
+      const r = await fetch(`/api/ficha/${encodeURIComponent(b.no_inventario)}/estado`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok && d.ficha_generando) b.ficha_generando = d.ficha_generando;
+    }
+    if (b.ficha_generando && b.ficha_generando.estado === "lista") { b.tiene_pdf = b.pdf_en_drive = true; }
+    if (estado.abierto === b && $("bDialogo").open) verFicha(b.no_inventario);
+  } finally { vigilando.delete(b.no_inventario); }
+}
+
+// ── Completar los datos de la ficha oficial (rol completo)
+const CAMPOS_FICHA = [["descripcion", "Descripción", 2], ["marca", "Marca"], ["modelo", "Modelo"], ["serie", "Serie"], ["material", "Material"], ["color", "Color"],
+  ["agrupados", "Agrupados"], ["organo_superior", "Órgano superior", 2], ["unidad_presupuestal", "Unidad presupuestal", 2], ["adscripcion", "Adscripción"],
+  ["ubicacion", "Ubicación", 2], ["fecha_adquisicion", "Fecha de adquisición", 0, "date"], ["moi", "Monto original (M.O.I.)", 0, "number"], ["cog", "COG"],
+  ["clave_armonizada", "Clave armonizada"], ["resguardo", "Resguardo"], ["estatus_contable", "Estatus contable"]];
+function abrirDatos() {
+  const b = estado.abierto;
+  $("bDatosTitulo").textContent = `Completar datos de la ficha · ${b.no_inventario}`;
+  $("bCampos").innerHTML = CAMPOS_FICHA.map(([k, t, ancho, tipo]) => {
+    const v = k === "moi" ? (b.moi || "") : k === "ubicacion" ? (b.ubicacion || b.edificio || "") : (b[k] ?? "");
+    return `<label class="${ancho ? "a" + ancho : ""}${String(v).trim() ? "" : " falta"}"><span>${t}${String(v).trim() ? "" : ` <i class="b-falta-eti">Falta</i>`}</span>
+      <input name="${k}" type="${tipo || "text"}"${tipo === "number" ? ` step="0.01" min="0"` : ""} maxlength="300" value="${esc(v)}" data-orig="${esc(v)}"></label>`;
+  }).join("");
+  $("bDatosMsg").textContent = b.datos_completados ? `Completado por ${b.datos_completados.quien} · ${b.datos_completados.cuando}` : "";
+  $("bDatosGuardar").disabled = false;
+  abrir($("bDatosDlg"));
+}
+async function guardarDatos(e) {
+  e.preventDefault();
+  const b = estado.abierto, datos = {};
+  $("bCampos").querySelectorAll("input").forEach(i => { datos[i.name] = i.value.trim(); });
+  $("bDatosGuardar").disabled = true; $("bDatosMsg").textContent = "Guardando…";
+  try {
+    const r = await fetch(`/api/bienes/${encodeURIComponent(b.no_inventario)}/datos`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ datos }) });
+    if (r.status === 401) { location.href = "index.html"; return; }
+    const d = await r.json();
+    if (!d.ok) { $("bDatosMsg").textContent = d.mensaje || "No se pudo guardar."; $("bDatosGuardar").disabled = false; return; }
+    Object.assign(b, d.datos); b.datos_completados = d.datos_completados; b.ficha_generando = d.ficha_generando;
+    cerrar($("bDatosDlg")); pintar(); verFicha(b.no_inventario); vigilarFicha(b);
+  } catch (x) { $("bDatosMsg").textContent = "Sin conexión. Intenta de nuevo."; $("bDatosGuardar").disabled = false; }
 }
 
 // ── Captura de las 3 fotos desde el celular (bienes sin fotos)
@@ -148,10 +206,10 @@ async function guardarCaptura() {
     if (r.status === 401) { location.href = "index.html"; return; }
     const d = await r.json();
     if (!d.ok) { $("bCapMsg").textContent = d.mensaje || "No se pudieron guardar."; $("bCapGuardar").disabled = false; return; }
-    b.fotos = d.fotos; b.fotos_capturadas = d.fotos_capturadas;
+    b.fotos = d.fotos; b.fotos_capturadas = d.fotos_capturadas; b.ficha_generando = d.ficha_generando;
     if (SOLO_CAPTURA) b.clasificacion = "Fotos tomadas";
     captura.fotos = [null, null, null]; captura.rehacer = false;
-    pintarGrupos(); pintar(); verFicha(b.no_inventario);
+    pintarGrupos(); pintar(); verFicha(b.no_inventario); vigilarFicha(b);
     $("bCapMsg").textContent = "";
   } catch (e) { $("bCapMsg").textContent = "Sin conexión. Intenta de nuevo."; $("bCapGuardar").disabled = false; }
 }
@@ -175,6 +233,8 @@ function verFicha(inv) {
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
   $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
+  $("bCompletar").hidden = SOLO_CAPTURA || SOLO_COMPROBAR;
+  if (b.ficha_generando && b.ficha_generando.estado === "generando") vigilarFicha(b);
   $("bCaptura").hidden = !b.pendiente;
   if (b.pendiente) {
     $("bCapturaTitulo").textContent = b.estatus_capturado ? "Estatus capturado" : "Capturar estatus";
@@ -373,6 +433,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     pintarCaptura();
   });
   $("bCapGuardar").addEventListener("click", guardarCaptura);
+  $("bCompletar").addEventListener("click", abrirDatos);
+  $("bDatosForm").addEventListener("submit", guardarDatos);
+  $("bCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l) { l.classList.toggle("cambiado", e.target.value.trim() !== e.target.dataset.orig); l.classList.toggle("falta", !e.target.value.trim()); } });
   $("bRehacer").addEventListener("click", () => { captura.rehacer = true; captura.fotos = [null, null, null]; pintarCaptura(); });
   $("bDescargar").addEventListener("click", async (e) => { e.preventDefault(); const url = await enlacePdf(estado.abierto); if (url) window.open(url, "_blank", "noopener"); });
   const capturar = async (valor) => {

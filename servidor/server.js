@@ -8,6 +8,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { neon } = require("@neondatabase/serverless");
+const { fichaPdf } = require("./ficha-pdf");
 
 // En local lee el .env del proyecto; en Render las variables vienen del panel
 const ENV_LOCAL = path.join(__dirname, "..", ".env");
@@ -44,6 +45,13 @@ sql`CREATE TABLE IF NOT EXISTS comprobaciones (
 
 sql`CREATE TABLE IF NOT EXISTS fotos_drive (nombre TEXT PRIMARY KEY, drive_id TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("fotos_drive:", e.message));
+
+// Datos de la ficha completados en el sistema (cargar_db.js no toca esta tabla): se ponen por encima de los de origen
+sql`CREATE TABLE IF NOT EXISTS ficha_capturas (
+  no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, datos JSONB NOT NULL DEFAULT '{}', quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("No se pudo preparar ficha_capturas:", e.message));
+const CAMPOS_FICHA = ["descripcion", "marca", "modelo", "serie", "material", "color", "agrupados", "organo_superior", "unidad_presupuestal",
+  "adscripcion", "ubicacion", "fecha_adquisicion", "moi", "cog", "clave_armonizada", "resguardo", "estatus_contable"];
 
 // rol "captura": solo ve los bienes sin fotos y solo puede tomarlas
 sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'completo'`.catch(e => console.error("rol:", e.message));
@@ -89,11 +97,14 @@ app.get("/api/bienes", sesion, async (req, res) => {
         k.valor AS comp_valor, k.quien AS comp_quien, to_char(k.cuando, 'YYYY-MM-DD HH24:MI') AS comp_cuando,
         e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en,
         (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
-        (SELECT max(c.quien || '|' || to_char(c.cuando, 'YYYY-MM-DD')) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario) AS foto_captura
-      FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN comprobaciones k USING (no_inventario)
+        (SELECT max(c.quien || '|' || to_char(c.cuando, 'YYYY-MM-DD')) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario) AS foto_captura,
+        fc.datos AS fc_datos, fc.quien AS fc_quien, to_char(fc.cuando, 'YYYY-MM-DD HH24:MI') AS fc_cuando
+      FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN comprobaciones k USING (no_inventario) LEFT JOIN ficha_capturas fc USING (no_inventario)
       ORDER BY length(b.no_inventario), b.no_inventario`;
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
-    const bienes = filas.map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, n_capturadas, foto_captura, comp_valor, comp_quien, comp_cuando, ...b }) => ({
+    const bienes = filas.map(({ fc_datos, fc_quien, fc_cuando, ...f }) => ({ ...f, ...(fc_datos || {}),
+      datos_completados: fc_quien ? { quien: fc_quien, cuando: fc_cuando, campos: Object.keys(fc_datos || {}) } : null,
+      ficha_generando: generacion.get(f.no_inventario) || null })).map(({ capturado, capturo, capturado_en, reviso, ficha_previa, origen, pdf, pdf_drive_id, actualizado, n_capturadas, foto_captura, comp_valor, comp_quien, comp_cuando, ...b }) => ({
       comprobado: comp_valor === null || comp_valor === undefined ? null : { valor: comp_valor, quien: comp_quien, cuando: comp_cuando },
       ...b, "revisó": reviso,
       // sin fotos de origen: se usan las tomadas en el sistema
@@ -173,9 +184,97 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
     await sql.transaction(bytes.map((x, i) => sql`INSERT INTO fotos_capturadas (no_inventario, orden, imagen, quien) VALUES (${inv}, ${i + 1}, ${x}, ${quien})
       ON CONFLICT (no_inventario, orden) DO UPDATE SET imagen = EXCLUDED.imagen, quien = EXCLUDED.quien, cuando = now()`));
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
-    res.json({ ok: true, fotos: [1, 2, 3].map(i => `api/foto/${inv}/${i}?t=${tf}&v=${Date.now()}`), fotos_capturadas: { quien, cuando: new Date().toISOString().slice(0, 10) } });
+    programarFicha(inv);
+    res.json({ ok: true, ficha_generando: generacion.get(inv), fotos: [1, 2, 3].map(i => `api/foto/${inv}/${i}?t=${tf}&v=${Date.now()}`), fotos_capturadas: { quien, cuando: new Date().toISOString().slice(0, 10) } });
   } catch (e) { fallo(res, e, "No se pudieron guardar las fotos."); }
 });
+
+// ── Completar los datos de la ficha (solo rol completo). Se guarda solo lo que difiere del origen.
+app.post("/api/bienes/:inv/datos", sesion, async (req, res) => {
+  if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede completar fichas." });
+  try {
+    const inv = String(req.params.inv);
+    const [b] = await sql`SELECT *, to_char(fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion FROM bienes WHERE no_inventario = ${inv}`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: "Ese bien no existe." });
+    const entrada = req.body?.datos || {}, datos = {};
+    for (const c of CAMPOS_FICHA) {
+      let v = entrada[c];
+      if (v === undefined || v === null) continue;
+      v = String(v).trim().slice(0, 300);
+      if (!v) continue;
+      if (c === "fecha_adquisicion" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return res.status(400).json({ ok: false, mensaje: "La fecha de adquisición no es válida." });
+      if (c === "moi") { const n = Number(v.replace(/[$,\s]/g, "")); if (!isFinite(n) || n < 0) return res.status(400).json({ ok: false, mensaje: "El monto original no es válido." }); v = n; }
+      const orig = c === "moi" ? Number(b.moi) || 0 : String(b[c] ?? "").trim();
+      if (v !== orig) datos[c] = v;
+    }
+    const quien = req.usuario.usuario || "—";
+    if (!Object.keys(datos).length) await sql`DELETE FROM ficha_capturas WHERE no_inventario = ${inv}`;
+    else await sql`INSERT INTO ficha_capturas (no_inventario, datos, quien) VALUES (${inv}, ${JSON.stringify(datos)}::jsonb, ${quien})
+      ON CONFLICT (no_inventario) DO UPDATE SET datos = EXCLUDED.datos, quien = EXCLUDED.quien, cuando = now()`;
+    programarFicha(inv);
+    res.json({ ok: true, datos, ficha_generando: generacion.get(inv),
+      datos_completados: Object.keys(datos).length ? { quien, cuando: new Date().toISOString().slice(0, 16).replace("T", " "), campos: Object.keys(datos) } : null });
+  } catch (e) { fallo(res, e, "No se pudieron guardar los datos de la ficha."); }
+});
+
+// ── Generación de la ficha en segundo plano: PDF -> Drive (guardarVarios) -> carpeta del bien (guardarCarpeta)
+const generacion = new Map();   // inv -> { estado: "generando"|"lista"|"error", cuando, error? }
+const pendientes = new Set(), enCurso = new Set();
+function programarFicha(inv) {
+  generacion.set(inv, { estado: "generando", cuando: new Date().toISOString() });
+  if (enCurso.has(inv)) { pendientes.add(inv); return; }
+  enCurso.add(inv);
+  (async () => {
+    do {
+      pendientes.delete(inv);
+      try { await generarFicha(inv); generacion.set(inv, { estado: "lista", cuando: new Date().toISOString() }); }
+      catch (e) { console.error("Ficha automática", inv, e); generacion.set(inv, { estado: "error", cuando: new Date().toISOString(), error: e.message }); }
+    } while (pendientes.has(inv));
+    enCurso.delete(inv);
+  })();
+}
+async function appsScript(cuerpo) {
+  if (!process.env.APPS_SCRIPT_FICHAS_URL) throw new Error("Falta APPS_SCRIPT_FICHAS_URL");
+  let ultimo;
+  for (let k = 1; k <= 3; k++) {
+    try {
+      const r = await fetch(process.env.APPS_SCRIPT_FICHAS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, redirect: "follow",
+        signal: AbortSignal.timeout(120000), body: JSON.stringify({ ...cuerpo, clave: process.env.APPS_SCRIPT_FICHAS_CLAVE }) });
+      const t = await r.text(); let d;
+      try { d = JSON.parse(t); } catch (e) { throw new Error("Apps Script respondió: " + t.slice(0, 120)); }
+      if (!d.ok) throw new Error(d.error || "Apps Script falló");
+      return d;
+    } catch (e) { ultimo = e; await new Promise(r => setTimeout(r, 2000 * k)); }
+  }
+  throw ultimo;
+}
+async function bajarImagen(url) {
+  const r = await fetch(url, { headers: { Accept: "image/jpeg,image/png" }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error(`Foto ${r.status}: ${url}`);
+  return Buffer.from(await r.arrayBuffer());
+}
+const FRONT_PUBLICO = "https://bienes-baja-sebiso.netlify.app/";
+async function generarFicha(inv) {
+  const [b] = await sql`SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, fc.datos AS fc_datos FROM bienes b LEFT JOIN ficha_capturas fc USING (no_inventario) WHERE b.no_inventario = ${inv}`;
+  if (!b) throw new Error("El bien no existe");
+  const bien = { ...b, ...(b.fc_datos || {}) };
+  const origen = await sql`SELECT COALESCE('https://lh3.googleusercontent.com/d/' || d.drive_id || '=w1400', ${FRONT_PUBLICO} || f.ruta) AS url FROM fotos f
+    LEFT JOIN fotos_drive d ON d.nombre = substring(f.ruta from '[^/]+$') WHERE f.no_inventario = ${inv} ORDER BY f.orden LIMIT 3`;
+  const fotos = origen.length
+    ? await Promise.all(origen.map(o => bajarImagen(o.url).catch(e => { console.error(e.message); return null; })))
+    : (await sql`SELECT imagen FROM fotos_capturadas WHERE no_inventario = ${inv} ORDER BY orden`).map(f => Buffer.from(f.imagen));
+  const pdf = await fichaPdf(bien, fotos);
+  const d = await appsScript({ accion: "guardarVarios", fichas: [{ no_inventario: inv, pdf_base64: pdf.toString("base64"), origen: "sistema" }] });
+  const r = (d.resultados || [])[0];
+  if (!r || !r.ok || !r.id) throw new Error((r && r.error) || "Drive no devolvió el id de la ficha");
+  await sql`UPDATE bienes SET pdf_drive_id = ${r.id} WHERE no_inventario = ${inv}`;
+  cachePdf.set(inv, { bytes: pdf, hasta: Date.now() + 30 * 60000 });
+  const archivos = fotos.map((f, i) => f && { nombre: `${inv} img ${i + 1}.jpg`, mime: f[0] === 0x89 ? "image/png" : "image/jpeg", base64: f.toString("base64") }).filter(Boolean);
+  archivos.push({ nombre: `FICHA_${inv}.pdf`, mime: "application/pdf", base64: pdf.toString("base64") });
+  await appsScript({ accion: "guardarCarpeta", inventario: inv, archivos });
+}
+
+app.get("/api/ficha/:inv/estado", sesion, (req, res) => res.json({ ok: true, ficha_generando: generacion.get(String(req.params.inv)) || null }));
 
 app.get("/api/foto/:inv/:orden", async (req, res) => {
   try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
