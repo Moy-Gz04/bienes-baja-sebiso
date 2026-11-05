@@ -53,6 +53,10 @@ sql`CREATE TABLE IF NOT EXISTS ficha_capturas (
 const CAMPOS_FICHA = ["estado_fisico", "descripcion", "marca", "modelo", "serie", "material", "color", "agrupados", "organo_superior", "unidad_presupuestal",
   "adscripcion", "ubicacion", "fecha_adquisicion", "moi", "cog", "clave_armonizada", "resguardo", "estatus_contable"];
 
+sql`CREATE TABLE IF NOT EXISTS captura_omitida (
+  no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("No se pudo preparar captura_omitida:", e.message));
+
 // rol "captura": solo ve los bienes sin fotos y solo puede tomarlas
 sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'completo'`.catch(e => console.error("rol:", e.message));
 
@@ -98,7 +102,8 @@ app.get("/api/bienes", sesion, async (req, res) => {
         e.clasificacion AS capturado, e.quien AS capturo, e.cuando AS capturado_en,
         (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
         (SELECT max(c.quien || '|' || to_char(c.cuando, 'YYYY-MM-DD')) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario) AS foto_captura,
-        fc.datos AS fc_datos, fc.quien AS fc_quien, to_char(fc.cuando, 'YYYY-MM-DD HH24:MI') AS fc_cuando
+        fc.datos AS fc_datos, fc.quien AS fc_quien, to_char(fc.cuando, 'YYYY-MM-DD HH24:MI') AS fc_cuando,
+        EXISTS (SELECT 1 FROM captura_omitida o WHERE o.no_inventario = b.no_inventario) AS captura_omitida
       FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN comprobaciones k USING (no_inventario) LEFT JOIN ficha_capturas fc USING (no_inventario)
       ORDER BY length(b.no_inventario), b.no_inventario`;
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
@@ -187,6 +192,17 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
     programarFicha(inv);
     res.json({ ok: true, ficha_generando: generacion.get(inv), fotos: [1, 2, 3].map(i => `api/foto/${inv}/${i}?t=${tf}&v=${Date.now()}`), fotos_capturadas: { quien, cuando: new Date().toISOString().slice(0, 10) } });
   } catch (e) { fallo(res, e, "No se pudieron guardar las fotos."); }
+});
+
+// ── Quitar (o regresar) un bien del apartado "Capturar datos"
+app.post("/api/bienes/:inv/omitir-captura", sesion, async (req, res) => {
+  if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede cambiar este apartado." });
+  try {
+    const inv = String(req.params.inv), quitar = req.body?.quitar !== false;
+    if (quitar) await sql`INSERT INTO captura_omitida (no_inventario, quien) VALUES (${inv}, ${req.usuario.usuario || "—"}) ON CONFLICT (no_inventario) DO NOTHING`;
+    else await sql`DELETE FROM captura_omitida WHERE no_inventario = ${inv}`;
+    res.json({ ok: true, captura_omitida: quitar });
+  } catch (e) { fallo(res, e, "No se pudo actualizar el apartado."); }
 });
 
 // ── Completar los datos de la ficha (solo rol completo). Se guarda solo lo que difiere del origen.

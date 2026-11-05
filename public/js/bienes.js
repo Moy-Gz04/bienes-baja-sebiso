@@ -26,7 +26,7 @@ function faltantes(b) {
   if (!lleno(estadoDe(b))) f.unshift("estado");
   return f;
 }
-const porCapturar = (b) => { const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
+const porCapturar = (b) => { if (b.captura_omitida) return false; const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
 const enGrupoDe = (b, g) => !g || (g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
 
 function filtrados() {
@@ -52,6 +52,22 @@ function pintarGrupos() {
 function comprobacion(b) {
   const v = b.comprobado ? b.comprobado.valor : null, t = b.comprobado ? ` · ${b.comprobado.quien} ${b.comprobado.cuando}` : "";
   return `<span class="b-marcas"><button type="button" class="b-marca si${v === true ? " activa" : ""}" data-comp="si" title="Comprobado${v === true ? t : ""}" aria-label="Marcar ${esc(b.no_inventario)} como comprobado" aria-pressed="${v === true}"><i class="bi bi-check-lg"></i></button><button type="button" class="b-marca no${v === false ? " activa" : ""}" data-comp="no" title="No comprobado${v === false ? t : ""}" aria-label="Marcar ${esc(b.no_inventario)} como no comprobado" aria-pressed="${v === false}"><i class="bi bi-x-lg"></i></button></span>`;
+}
+
+async function quitarDeCaptura(inv) {
+  const b = BIENES.find(x => x.no_inventario === inv); if (!b) return;
+  const M = window.MiniSEBISO;
+  const si = M && M.preguntar && !M.apagado
+    ? await M.preguntar({ titulo: "Quitar de Capturar datos", pregunta: `¿Quito el bien ${inv} de Capturar datos?`, detalle: b.descripcion || "", btnOk: "Sí, quitarlo", iconoOk: "ti-x", textoOk: "Lo quito del apartado…", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Lo dejamos en el apartado." })
+    : confirm(`¿Quito el bien ${inv} de Capturar datos?`);
+  if (!si) return;
+  try {
+    const r = await fetch(`/api/bienes/${encodeURIComponent(inv)}/omitir-captura`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ quitar: true }) });
+    if (r.status === 401) { location.href = "index.html"; return; }
+    const d = await r.json();
+    if (!d.ok) { alert(d.mensaje || "No se pudo quitar."); return; }
+    b.captura_omitida = true; pintarGrupos(); pintar();
+  } catch (x) { alert("Sin conexión. Intenta de nuevo."); }
 }
 
 async function marcarComprobado(inv, cual) {
@@ -83,7 +99,7 @@ function pintar() {
   $("bCuerpo").innerHTML = lista.map(b => `<tr data-inv="${esc(b.no_inventario)}">
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
       <td class="b-num">${esc(b.no_inventario)}</td>
-      <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small>${estado.grupo === "__capturar" ? `<small class="b-faltan">Falta: ${esc(faltantes(b).join(", "))}</small>` : ""}</span></td>
+      <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small>${estado.grupo === "__capturar" ? `<small class="b-faltan">Falta: ${esc(faltantes(b).join(", "))}</small><button type="button" class="b-quitar" data-quitar title="Quitar de Capturar datos"><i class="bi bi-x-circle"></i> Quitar de este apartado</button>` : ""}</span></td>
       <td><span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span>${b.propuesta_dif ? `<small class="b-sub">${esc(b.propuesta_dif)}</small>` : ""}</td>
       <td class="b-c">${estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "—"}</td>
       <td class="b-d">${pesos(b.moi)}</td>
@@ -396,7 +412,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     estado.grupo = g.dataset.grupo; pintarGrupos(); pintar();
   });
   ["bBuscar", "bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", pintar));
-  $("bCuerpo").addEventListener("click", (e) => { const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
+  $("bCuerpo").addEventListener("click", (e) => { const q = e.target.closest("[data-quitar]"); if (q) { e.stopPropagation(); quitarDeCaptura(q.closest("tr").dataset.inv); return; } const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
   $("bMiniaturas").addEventListener("click", (e) => { const m = e.target.closest("button"); if (m) { estado.foto = +m.dataset.i; mostrarFoto(); } });
   const mover = (d) => { const n = estado.abierto.fotos.length; if (n) { estado.foto = (estado.foto + d + n) % n; mostrarFoto(); } };
   $("bFotoAnt").addEventListener("click", () => mover(-1));
