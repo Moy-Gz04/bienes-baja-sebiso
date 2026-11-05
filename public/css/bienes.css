@@ -312,3 +312,4 @@ html{ touch-action:manipulation; -webkit-text-size-adjust:100%; }
 .b-faltan{ display:block; color:#9A6B00; font-weight:600; }
 .b-quitar{ margin-top:6px; display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border:1px solid #d8c9a0; border-radius:999px; background:#fff8e6; color:#7a5600; font:600 12px inherit; cursor:pointer; }
 .b-quitar:hover{ background:#ffefc2; }
+.b-area-dif{ display:inline-block; margin-top:4px; padding:2px 9px; border-radius:999px; background:#f3e3e8; color:#691C32; font-weight:700; font-size:11px; }
