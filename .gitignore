@@ -14,3 +14,6 @@ public/q
 servidor/node_modules
 subida.log
 subida.lock
+_carpetas_tmp/
+public/c/
+*.log

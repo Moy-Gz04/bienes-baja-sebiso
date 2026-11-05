@@ -19,6 +19,12 @@ if len(sys.argv) > 1:
     solo = set(json.load(open(sys.argv[1], encoding="utf-8")))
     bienes = [b for b in bienes if b["no_inventario"] in solo]
 
+# Fotos tomadas desde el celular (exportar_capturadas.js): se usan si el bien no tiene fotos propias
+_cap = os.path.join(AQUI, "data", "fotos_capturadas.json")
+CAPTURADAS = json.load(open(_cap, encoding="utf-8")) if os.path.exists(_cap) else {}
+def fotos_de(b):
+    return b.get("fotos") or CAPTURADAS.get(b["no_inventario"], [])
+
 def fecha(f):
     return "/".join(reversed(f.split("-"))) if f else ""
 
@@ -60,12 +66,12 @@ for b in bienes:
              b.get("material", ""), b.get("color", ""), b.get("agrupados", ""), b.get("organo_superior", ""),
              b.get("unidad_presupuestal", ""), b.get("adscripcion", ""), b.get("ubicacion") or b.get("edificio", "")]
     for i, v in enumerate(fila3, start=1):
-        ws.cell(3, i).value = v or None
+        ws.cell(3, i).value = v if (v is not None and str(v).strip()) else "-"
     fila6 = [fecha(b.get("fecha_adquisicion", "")), f"${b['moi']:,.2f}" if b.get("moi") else "", (b.get("cog") or "")[:3],
              b.get("clave_armonizada", ""), b.get("resguardo", ""), b.get("estatus_contable", "")]
     for i, v in enumerate(fila6, start=1):
-        ws.cell(6, i).value = v or None
-    for (c0, c1), foto in zip(CAJAS, b.get("fotos", [])[:3]):
+        ws.cell(6, i).value = v if (v is not None and str(v).strip()) else "-"
+    for (c0, c1), foto in zip(CAJAS, fotos_de(b)[:3]):
         ruta = os.path.join(AQUI, "public", foto)
         # caja en píxeles (ancho de columna ≈ 7 px por carácter, 20 px por fila); la foto se escala sin deformarse
         caja_w = sum((ws.column_dimensions[openpyxl.utils.get_column_letter(c + 1)].width or 9) * 7 for c in range(c0, c1)) - 10

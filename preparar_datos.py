@@ -207,7 +207,7 @@ if os.path.exists(RUTA_FT):
                 b["avisos"].append(f"La ficha escaneada dice estado {estado} y la ficha en Excel dice {b['estado_ficha']}.")
             b["estado_ficha"] = estado
         if not b.get("fotos"): b["fotos"] = f.get("fotos", [])
-        b["pdf"] = f["pdf"]; b["ficha"] = True; b["ficha_escaneada"] = f["origen"]
+        b["ficha"] = True; b["ficha_escaneada"] = f["origen"]
         if f.get("duplicada_en"): b["avisos"].append(f"Su ficha escaneada viene dos veces ({f['origen']} y {f['duplicada_en']}).")
     print(f"fichas escaneadas integradas; bienes nuevos: {nuevos_ft}")
 # "Solo fotos" también está fuera del padrón: un solo apartado
@@ -302,8 +302,13 @@ if os.path.exists(_extra):
             nuevas.append("f/" + nombre)
         bienes[num]["fotos"] = nuevas
 
+# Todos los bienes usan la ficha generada con el formato oficial (p/...), incluidos los que tenían ficha escaneada
+for b in bienes.values():
+    b["pdf"] = "p/" + hashlib.sha1(SAL + ("pdf/" + b["no_inventario"]).encode()).hexdigest()[:24] + ".pdf"
+
 lista = [bienes[n] for n in orden]
 json.dump(lista, open(os.path.join(AQUI, "data", "bienes.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+json.dump({b["no_inventario"]: b["pdf"] for b in lista}, open(os.path.join(AQUI, "data", "pdfs.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
 total_filas = sum(len(b["filas"]) for b in lista)
 print(f"{len(lista)} bienes ({total_filas} filas del Excel), con fotos: {sum(1 for b in lista if b['fotos'])}, "
       f"fotos: {sum(len(b['fotos']) for b in lista)}")
