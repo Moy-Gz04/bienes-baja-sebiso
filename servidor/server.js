@@ -50,7 +50,7 @@ sql`CREATE TABLE IF NOT EXISTS fotos_drive (nombre TEXT PRIMARY KEY, drive_id TE
 sql`CREATE TABLE IF NOT EXISTS ficha_capturas (
   no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, datos JSONB NOT NULL DEFAULT '{}', quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar ficha_capturas:", e.message));
-const CAMPOS_FICHA = ["descripcion", "marca", "modelo", "serie", "material", "color", "agrupados", "organo_superior", "unidad_presupuestal",
+const CAMPOS_FICHA = ["estado_fisico", "descripcion", "marca", "modelo", "serie", "material", "color", "agrupados", "organo_superior", "unidad_presupuestal",
   "adscripcion", "ubicacion", "fecha_adquisicion", "moi", "cog", "clave_armonizada", "resguardo", "estatus_contable"];
 
 // rol "captura": solo ve los bienes sin fotos y solo puede tomarlas

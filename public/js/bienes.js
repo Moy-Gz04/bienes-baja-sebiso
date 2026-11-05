@@ -6,7 +6,7 @@ const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["C
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
-  ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"], ["__sinfotos", "Sin fotos"],
+  ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"], ["__sinfotos", "Sin fotos"], ["__capturar", "Capturar datos"],
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -15,13 +15,24 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
+// Datos que se revisan para el apartado "Capturar datos"
+const DATOS_CLAVE = [["marca", "marca"], ["modelo", "modelo"], ["serie", "serie"], ["material", "material"], ["color", "color"], ["adscripcion", "adscripción"],
+  ["ubicacion", "ubicación"], ["fecha_adquisicion", "fecha"], ["moi", "monto"], ["organo_superior", "órgano superior"], ["unidad_presupuestal", "unidad presupuestal"], ["resguardo", "resguardo"]];
+const lleno = (x) => { const t = String(x ?? "").trim(); return !!t && t !== "-" && t !== "0" && !/^s\/?[mn]$/i.test(t); };
+function faltantes(b) {
+  const f = DATOS_CLAVE.filter(([k]) => !lleno(k === "ubicacion" ? (b.ubicacion || b.edificio) : b[k])).map(([, t]) => t);
+  if (!lleno(estadoDe(b))) f.unshift("estado");
+  return f;
+}
+const porCapturar = (b) => { const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
+const enGrupoDe = (b, g) => !g || (g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
 
 function filtrados() {
   const terminos = norm($("bBuscar").value).split(/\s+/).filter(Boolean);
   const est = $("bEstado").value, fotos = $("bFotos").value, ficha = $("bFicha").value;
-  const enGrupo = (b) => !estado.grupo || (estado.grupo === "__sinfotos" ? !b.fotos.length : b.clasificacion === estado.grupo);
+  const enGrupo = (b) => enGrupoDe(b, estado.grupo);
   const lista = BIENES.filter(b => enGrupo(b) && (!est || estadoDe(b) === est)
     && (!fotos || (fotos === "si") === b.fotos.length > 0) && (!ficha || (ficha === "si") === !!b.ficha) && terminos.every(t => b.indice.includes(t)));
   const o = $("bOrden").value;
@@ -32,7 +43,7 @@ function filtrados() {
 
 function pintarGrupos() {
   $("bGrupos").innerHTML = GRUPOS.map(([v, t]) => {
-    const l = !v ? BIENES : v === "__sinfotos" ? BIENES.filter(b => !b.fotos.length) : BIENES.filter(b => b.clasificacion === v);
+    const l = BIENES.filter(b => enGrupoDe(b, v));
     return `<button type="button" role="tab" class="b-grupo ${clase(v)}" data-grupo="${esc(v)}" aria-selected="${estado.grupo === v}">
       <span>${t}</span><b>${l.length.toLocaleString("es-MX")}</b><small>${pesos(l.reduce((s, b) => s + (b.moi || 0), 0))}</small></button>`;
   }).join("");
@@ -72,7 +83,7 @@ function pintar() {
   $("bCuerpo").innerHTML = lista.map(b => `<tr data-inv="${esc(b.no_inventario)}">
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
       <td class="b-num">${esc(b.no_inventario)}</td>
-      <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small></span></td>
+      <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small>${estado.grupo === "__capturar" ? `<small class="b-faltan">Falta: ${esc(faltantes(b).join(", "))}</small>` : ""}</span></td>
       <td><span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span>${b.propuesta_dif ? `<small class="b-sub">${esc(b.propuesta_dif)}</small>` : ""}</td>
       <td class="b-c">${estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "—"}</td>
       <td class="b-d">${pesos(b.moi)}</td>
@@ -134,7 +145,7 @@ async function vigilarFicha(b) {
 }
 
 // ── Completar los datos de la ficha oficial (rol completo)
-const CAMPOS_FICHA = [["descripcion", "Descripción", 2], ["marca", "Marca"], ["modelo", "Modelo"], ["serie", "Serie"], ["material", "Material"], ["color", "Color"],
+const CAMPOS_FICHA = [["estado_fisico", "Estado físico"], ["descripcion", "Descripción", 2], ["marca", "Marca"], ["modelo", "Modelo"], ["serie", "Serie"], ["material", "Material"], ["color", "Color"],
   ["agrupados", "Agrupados"], ["organo_superior", "Órgano superior", 2], ["unidad_presupuestal", "Unidad presupuestal", 2], ["adscripcion", "Adscripción"],
   ["ubicacion", "Ubicación", 2], ["fecha_adquisicion", "Fecha de adquisición", 0, "date"], ["moi", "Monto original (M.O.I.)", 0, "number"], ["cog", "COG"],
   ["clave_armonizada", "Clave armonizada"], ["resguardo", "Resguardo"], ["estatus_contable", "Estatus contable"]];
@@ -142,7 +153,7 @@ function abrirDatos() {
   const b = estado.abierto;
   $("bDatosTitulo").textContent = `Completar datos de la ficha · ${b.no_inventario}`;
   $("bCampos").innerHTML = CAMPOS_FICHA.map(([k, t, ancho, tipo]) => {
-    const v = k === "moi" ? (b.moi || "") : k === "ubicacion" ? (b.ubicacion || b.edificio || "") : (b[k] ?? "");
+    const v = k === "estado_fisico" ? estadoDe(b) : k === "moi" ? (b.moi || "") : k === "ubicacion" ? (b.ubicacion || b.edificio || "") : (b[k] ?? "");
     return `<label class="${ancho ? "a" + ancho : ""}${String(v).trim() ? "" : " falta"}"><span>${t}${String(v).trim() ? "" : ` <i class="b-falta-eti">Falta</i>`}</span>
       <input name="${k}" type="${tipo || "text"}"${tipo === "number" ? ` step="0.01" min="0"` : ""} maxlength="300" value="${esc(v)}" data-orig="${esc(v)}"></label>`;
   }).join("");
