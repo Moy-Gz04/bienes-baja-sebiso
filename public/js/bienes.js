@@ -26,7 +26,7 @@ function faltantes(b) {
   if (!lleno(estadoDe(b))) f.unshift("estado");
   return f;
 }
-const porCapturar = (b) => { if (b.captura_omitida) return false; const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
+const porCapturar = (b) => { if (b.captura_omitida || b.fotos.length) return false; const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
 const enGrupoDe = (b, g) => !g || (g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
 
 function filtrados() {
