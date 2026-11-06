@@ -6,7 +6,7 @@ const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["C
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
-  ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["Fuera del padrón", "Fuera del padrón"], ["__sinfotos", "Sin fotos"], ["__capturar", "Capturar datos"],
+  ["Propuesta DIF", "Propuesta DIF"], ["Pendiente de estatus", "Pendiente de estatus"], ["__sinfotos", "Sin fotos"], ["__capturar", "Capturar datos"],
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -341,7 +341,7 @@ function pintarGraficas() {
   const B = BIENES;
   const cuenta = (fn) => { const m = new Map(); B.forEach(b => { const k = fn(b); if (k) m.set(k, (m.get(k) || 0) + 1); }); return m; };
   const suma = (fn) => { const m = new Map(); B.forEach(b => { const k = fn(b); if (k) m.set(k, (m.get(k) || 0) + (b.moi || 0)); }); return m; };
-  const orden = ["Baja definitiva", "Para reaprovechamiento", "Propuesta DIF", "Pendiente de estatus", "Fuera del padrón"];
+  const orden = ["Baja definitiva", "Para reaprovechamiento", "Propuesta DIF", "Pendiente de estatus"];
   const porClas = cuenta(b => b.clasificacion), valClas = suma(b => b.clasificacion);
   const porEst = cuenta(b => estadoDe(b) || "Sin estado");
   const porUnidad = [...cuenta(b => sinArea(b.unidad_presupuestal) || "Sin unidad")].sort((a, b) => b[1] - a[1]);
