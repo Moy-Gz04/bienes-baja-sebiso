@@ -40,7 +40,8 @@ async function una({ n, ruta }) {
 (async () => {
   const lista = [...ultimos.values()].sort((a, b) => a.n - b.n);
   const hechos = new Set((await sql`SELECT persona_id FROM resguardo_pdfs WHERE drive_carpeta IS NOT NULL`).map(r => r.persona_id));
-  const pend = lista.filter(l => process.env.SIN_DRIVE || !hechos.has(l.n));
+  const forzar = new Set(String(process.env.FORZAR || "").split(",").filter(Boolean).map(Number));   // FORZAR=70,90 vuelve a subir esos
+  const pend = lista.filter(l => process.env.SIN_DRIVE || forzar.has(l.n) || !hechos.has(l.n));
   console.log(`PDF generados: ${lista.length} · por subir: ${pend.length}`);
   let ok = 0, mal = 0, i = 0;
   const trabajador = async () => {

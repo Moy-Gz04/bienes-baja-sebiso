@@ -1,7 +1,7 @@
 # Genera en un solo Excel el resguardo PDF de cada persona de salida\lote.json (lo arma enriquecer.py).
 # PDF -> Descargas\Resguardos Nuevo Edificio\<Área>\RESGUARDO - <Nombre>.pdf. Registra en salida\lote.log y salta los que ya existen (se puede reanudar).
 param([string]$Salida = "$PSScriptRoot\salida", [string]$Plantilla = "C:\Users\jgome\Downloads\RESGUARDO  compus  2026.xlsx",
-      [string]$Raiz = "C:\Users\jgome\Downloads\Resguardos Nuevo Edificio", [string]$Fecha = "12/11/2026", [int]$Solo = 0, [int]$Margen = 60)
+      [string]$Raiz = "C:\Users\jgome\Downloads\Resguardos Nuevo Edificio", [string]$Fecha = "12/11/2026", [int]$Solo = 0, [int]$Margen = 60, [int]$Extra = 0, [int]$Fila = 40)
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $lote = Get-Content "$Salida\lote.json" -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -87,7 +87,7 @@ function Generar($d, $pdf) {
     $ps.PrintArea = "A1:I$ult"
     $dim = @(841.9, 595.3)
     $anchoCols = $ws.Range("A1:I1").Width
-    $poner = { param($h) foreach ($k in 1..$SP) { $ws.Rows($fin + $k).RowHeight = [Math]::Max(0.5, [Math]::Min(40, $h - 40 * ($k - 1))) } }
+    $poner = { param($h) foreach ($k in 1..$SP) { $ws.Rows($fin + $k).RowHeight = [Math]::Max(0.5, [Math]::Min($Fila, $h - $Fila * ($k - 1))) } }
     & $poner 0.5
     $imprimible = $dim[1] - $ps.TopMargin - $ps.BottomMargin
     $titulo = $ws.Range("A7:A8").Height
@@ -97,10 +97,14 @@ function Generar($d, $pdf) {
     if ($zAlto -ge $zoom - 12 -and $zAlto -ge 50) { $zoom = [Math]::Min($zoom, $zAlto) }   # si casi cabe en una hoja, se reduce un poco más
     $ps.Zoom = $zoom
     $altoPag = $imprimible / ($zoom / 100 * 1.05)
-    $margen = $Margen   # filas altas: se pierde parte de cada hoja al no partirse las filas
+    $margen = [Math]::Min($Margen, 150)   # filas altas: se pierde parte de cada hoja al no partirse las filas
     $paginas = 1; while ($contenido + 3 + ($paginas - 1) * $margen -gt ($altoPag * $paginas - ($paginas - 1) * $titulo)) { $paginas++ }
     $libre = $altoPag * $paginas - ($paginas - 1) * $titulo - $contenido - 3 - ($paginas - 1) * $margen + 10
-    & $poner ([Math]::Max(0.5, $libre))
+    if ($Margen -ge 900) {   # el recuadro no cabe tras la tabla: va en hoja propia, al pie
+      $ws.HPageBreaks.Add($ws.Range("A$($fin + 1)")) | Out-Null
+      $libre = $altoPag - $titulo - $ws.Range("A$($fin + $SP + 1):A$ult").Height - 8
+    }
+    & $poner ([Math]::Max(0.5, $libre + $Extra))
     New-Item -ItemType Directory -Force (Split-Path $pdf) | Out-Null
     $ws.ExportAsFixedFormat(0, $pdf)
     return "zoom=$zoom hojas~$paginas"
