@@ -29,17 +29,37 @@ function pintarTomas() {
   document.querySelectorAll(".mu-toma").forEach(d => {
     const k = d.dataset.k, b = d.querySelector("button"), f = fotos[k];
     b.classList.toggle("listo", !!f); if (f) b.classList.remove("mal");
-    b.innerHTML = f ? `<img src="${f}" alt="${ROT[k]}">` : `<span><i class="bi bi-camera"></i>${ROT[k]}</span>`;
+    b.draggable = !!f;
+    b.innerHTML = f ? `<img src="${f}" alt="${ROT[k]}"><span class="mu-x" data-quitar="1" aria-label="Quitar foto">✕</span>` : `<span><i class="bi bi-camera"></i>${ROT[k]}</span>`;
   });
 }
+async function poner(k, archivo) {
+  if (!archivo || !/^image\//.test(archivo.type)) return;
+  try { fotos[k] = await reducir(archivo); msg(""); } catch (e) { msg("No se pudo leer la foto. Intenta de nuevo."); }
+  pintarTomas();
+}
 document.querySelectorAll(".mu-toma").forEach(d => {
-  const inp = d.querySelector("input"), k = d.dataset.k;
-  d.querySelector("button").addEventListener("click", () => inp.click());
-  inp.addEventListener("change", async () => {
-    const f = inp.files[0]; inp.value = ""; if (!f) return;
-    try { fotos[k] = await reducir(f); msg(""); } catch (e) { msg("No se pudo leer la foto. Intenta de nuevo."); }
-    pintarTomas();
+  const inp = d.querySelector("input"), b = d.querySelector("button"), k = d.dataset.k;
+  b.addEventListener("click", (e) => { if (e.target.closest("[data-quitar]")) { fotos[k] = null; pintarTomas(); return; } inp.click(); });
+  inp.addEventListener("change", () => { const f = inp.files[0]; inp.value = ""; poner(k, f); });
+  // arrastrar una foto sobre otro cuadro las intercambia; también se pueden soltar archivos de la computadora
+  b.addEventListener("dragstart", (e) => { if (!fotos[k]) return e.preventDefault(); e.dataTransfer.setData("text/x-mu", k); e.dataTransfer.effectAllowed = "move"; b.classList.add("arrastrando"); });
+  b.addEventListener("dragend", () => b.classList.remove("arrastrando"));
+  b.addEventListener("dragover", (e) => { e.preventDefault(); b.classList.add("sobre"); });
+  b.addEventListener("dragleave", () => b.classList.remove("sobre"));
+  b.addEventListener("drop", (e) => {
+    e.preventDefault(); b.classList.remove("sobre");
+    const o = e.dataTransfer.getData("text/x-mu");
+    if (o) { if (o !== k) { [fotos[o], fotos[k]] = [fotos[k], fotos[o]]; pintarTomas(); } }
+    else if (e.dataTransfer.files.length) poner(k, e.dataTransfer.files[0]);
   });
+});
+// soltar varias fotos sobre el formulario: llenan los cuadros vacíos en orden (frente, lado, etiqueta)
+$("muForm").addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); });
+$("muForm").addEventListener("drop", async (e) => {
+  if (e.defaultPrevented || !e.dataTransfer.files.length) return; e.preventDefault();
+  const libres = Object.keys(fotos).filter(k => !fotos[k]), fs = [...e.dataTransfer.files];
+  for (let i = 0; i < Math.min(libres.length, fs.length); i++) await poner(libres[i], fs[i]);
 });
 pintarTomas();
 

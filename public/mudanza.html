@@ -24,7 +24,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
 <div class="contenido">
 <section class="tv">
   <header class="tv-cabeza">
-    <div><p class="tv-eyebrow">Inventario · Mudanza</p><h1>Captura de bienes para la mudanza</h1></div>
+    <div><p class="tv-eyebrow">Inventario · Mudanza</p><h1>Captura de bienes</h1></div>
     <div class="b-cabeza-der"><div class="b-resumen" id="muResumen" aria-live="polite"></div></div>
   </header>
 
@@ -41,6 +41,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
       <div class="mu-toma" data-k="lado"><button type="button" class="mu-foto"></button><input type="file" accept="image/*" capture="environment" hidden></div>
       <div class="mu-toma" data-k="etiqueta"><button type="button" class="mu-foto"></button><input type="file" accept="image/*" capture="environment" hidden></div>
     </div>
+    <p class="mu-tip">Toca un cuadro para tomar la foto o arrastra fotos aquí. Arrastra una sobre otra para cambiarlas de lugar.</p>
     <p class="mu-msg" id="muMsg" role="status"></p>
     <div class="mu-acciones"><button type="submit" class="mu-guardar" id="muGuardar"><i class="bi bi-check2-circle"></i> Guardar bien</button><button type="button" class="mu-limpiar" id="muLimpiar">Limpiar</button></div>
   </form>
