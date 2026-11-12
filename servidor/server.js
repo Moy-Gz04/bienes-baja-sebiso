@@ -198,13 +198,22 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
 app.get("/api/resguardos", sesion, async (req, res) => {
   if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." });
   try {
-    const personas = await sql`SELECT id, orden, area, area_orden, seccion, nombre, vacante, cargo, jefe, (foto IS NOT NULL) AS tiene_foto FROM resguardo_personas ORDER BY orden`;
-    const bienes = await sql`SELECT persona_id, no_inventario, tipo, modelo, descripcion, serie, observaciones FROM resguardo_bienes ORDER BY persona_id, orden`;
+    const personas = await sql`SELECT id, orden, area, area_orden, seccion, nombre, vacante, cargo, jefe, (foto IS NOT NULL) AS tiene_foto, EXISTS (SELECT 1 FROM resguardo_pdfs d WHERE d.persona_id = resguardo_personas.id) AS tiene_pdf FROM resguardo_personas ORDER BY orden`;
+    const bienes = await sql`SELECT persona_id, no_inventario, tipo, modelo, descripcion, serie, observaciones, marca, caracteristicas FROM resguardo_bienes ORDER BY persona_id, orden`;
     const por = new Map();
-    for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones }); }
-    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
-    res.json({ ok: true, personas: personas.map(({ tiene_foto, ...p }) => ({ ...p, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}` : null, bienes: por.get(p.id) || [] })) });
+    for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones, marca: b.marca, carac: b.caracteristicas }); }
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" }), tr = jwt.sign({ proposito: "resguardo" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, personas: personas.map(({ tiene_foto, tiene_pdf, ...p }) => ({ ...p, resguardo: tiene_pdf ? `api/resguardos/${p.id}/pdf?t=${tr}` : null, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}` : null, bienes: por.get(p.id) || [] })) });
   } catch (e) { fallo(res, e, "No se pudieron cargar los resguardos."); }
+});
+
+app.get("/api/resguardos/:id/pdf", async (req, res) => {
+  try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "resguardo") throw 0; } catch (e) { return res.status(401).send("El enlace venció. Vuelve a abrirlo desde el sistema."); }
+  try {
+    const [f] = await sql`SELECT nombre, pdf FROM resguardo_pdfs WHERE persona_id = ${Number(req.params.id) || 0}`;
+    if (!f) return res.status(404).send("Esta persona todavía no tiene resguardo.");
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(f.nombre)}`, "Cache-Control": "private, max-age=300" }).send(Buffer.from(f.pdf));
+  } catch (e) { fallo(res, e, "No se pudo cargar el resguardo."); }
 });
 
 app.get("/api/resguardos/:id/foto", async (req, res) => {

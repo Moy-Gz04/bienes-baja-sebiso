@@ -35,7 +35,11 @@
 .rg-total span{ font-size:10.5px; color:var(--txt2); }
 .rg-bienes{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:5px; margin:6px 0 0; padding:8px 0 0; border-top:1px solid #F1EAE1; list-style:none; }
 .rg-bienes li{ padding:2px 8px; border-radius:7px; background:var(--suave); color:var(--txt); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
-.rg-mas{ grid-column:1 / -1; justify-self:start; padding:4px 10px; border:1.5px solid var(--borde); border-radius:8px; background:#fff; color:var(--g); font:700 11px 'Montserrat',sans-serif; cursor:pointer; }
+.rg-pie{ grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
+.rg-pie:empty{ display:none; }
+.rg-pdf{ margin-left:auto; padding:5px 12px; font-size:11.5px; text-decoration:none; }
+.rg-bienes li small{ display:block; max-width:150px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:9.5px; font-weight:500; color:var(--txt2); }
+.rg-mas{ justify-self:start; padding:4px 10px; border:1.5px solid var(--borde); border-radius:8px; background:#fff; color:var(--g); font:700 11px 'Montserrat',sans-serif; cursor:pointer; }
 .rg-mas:hover{ border-color:var(--g); }
 .rg-vacio{ padding:40px 0; text-align:center; color:var(--txt2); }
 @media (max-width:700px){ .rg-barra{ grid-template-columns:1fr; } .rg-grid{ grid-template-columns:1fr; } }

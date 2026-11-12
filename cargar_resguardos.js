@@ -30,16 +30,23 @@ const AREAS = [...new Set(personas.map(p => p.area))];
     nombre TEXT NOT NULL, vacante BOOLEAN NOT NULL DEFAULT FALSE, cargo TEXT, jefe TEXT, foto BYTEA)`;
   await sql`CREATE TABLE IF NOT EXISTS resguardo_bienes (id SERIAL PRIMARY KEY, persona_id INT NOT NULL REFERENCES resguardo_personas ON DELETE CASCADE, orden INT NOT NULL,
     no_inventario TEXT NOT NULL, tipo TEXT, modelo TEXT, descripcion TEXT, serie TEXT, observaciones TEXT)`;
+  await sql`ALTER TABLE resguardo_bienes ADD COLUMN IF NOT EXISTS marca TEXT`;
+  await sql`ALTER TABLE resguardo_bienes ADD COLUMN IF NOT EXISTS caracteristicas TEXT`;
+  await sql`CREATE TABLE IF NOT EXISTS resguardo_pdfs (persona_id INT PRIMARY KEY REFERENCES resguardo_personas ON DELETE CASCADE, nombre TEXT NOT NULL, pdf BYTEA NOT NULL,
+    drive_carpeta TEXT, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`;
   await sql`CREATE INDEX IF NOT EXISTS resguardo_bienes_persona ON resguardo_bienes (persona_id)`;
+  // los PDF ya generados se conservan: se guardan aparte y se vuelven a enlazar
+  const pdfs = await sql`SELECT persona_id, nombre, pdf, drive_carpeta FROM resguardo_pdfs`.catch(() => []);
   await sql`DELETE FROM resguardo_personas`;
   for (const p of personas) {
     const foto = p.foto ? fs.readFileSync(path.join(DIR, "fotos", p.foto)) : null;
     await sql`INSERT INTO resguardo_personas (id, orden, area, area_orden, seccion, nombre, vacante, cargo, jefe, foto) VALUES
       (${p.n}, ${p.n}, ${titulo(p.area)}, ${AREAS.indexOf(p.area)}, ${SECCIONES[p.hoja] || titulo(p.hoja)}, ${p.vacante ? "Vacante " + p.nombre_completo.replace(/\D/g, "") : titulo(p.nombre_completo)},
        ${p.vacante}, ${titulo(p.cargo) || null}, ${titulo(p.jefe) || null}, ${foto})`;
-    if (p.bienes.length) await sql.transaction(p.bienes.map((b, i) => sql`INSERT INTO resguardo_bienes (persona_id, orden, no_inventario, tipo, modelo, descripcion, serie, observaciones)
-      VALUES (${p.n}, ${i}, ${b.inv}, ${b.tipo || null}, ${b.modelo || null}, ${b.desc || null}, ${b.serie || null}, ${b.obs || null})`));
+    if (p.bienes.length) await sql.transaction(p.bienes.map((b, i) => sql`INSERT INTO resguardo_bienes (persona_id, orden, no_inventario, tipo, modelo, descripcion, serie, observaciones, marca, caracteristicas)
+      VALUES (${p.n}, ${i}, ${b.inv}, ${b.tipo || null}, ${b.modelo || null}, ${b.desc || null}, ${b.serie || null}, ${b.obs || null}, ${b.marca || null}, ${b.carac || null})`));
   }
+  for (const f of pdfs) await sql`INSERT INTO resguardo_pdfs (persona_id, nombre, pdf, drive_carpeta) VALUES (${f.persona_id}, ${f.nombre}, ${Buffer.from(f.pdf)}, ${f.drive_carpeta}) ON CONFLICT DO NOTHING`.catch(() => {});
   const [r] = await sql`SELECT (SELECT count(*) FROM resguardo_personas)::int p, (SELECT count(*) FROM resguardo_bienes)::int b, (SELECT count(*) FROM resguardo_personas WHERE foto IS NOT NULL)::int f`;
   console.log(r);
 })().catch(e => { console.error(e); process.exit(1); });

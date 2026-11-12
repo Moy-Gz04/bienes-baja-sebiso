@@ -14,8 +14,8 @@ function filtrados() {
 function tarjeta(p) {
   const abierta = estado.abiertos.has(p.id), n = p.bienes.length, lista = abierta ? p.bienes : p.bienes.slice(0, VISIBLES);
   const avatar = p.foto ? `<img src="${esc(p.foto)}" alt="Foto de ${esc(p.nombre)}" loading="lazy">` : `<span class="rg-ini${p.vacante ? " vac" : ""}">${p.vacante ? '<i class="bi bi-person-dash"></i>' : esc(iniciales(p.nombre))}</span>`;
-  const detalle = (b) => [b.tipo, b.modelo, b.desc, b.serie && "S/N " + b.serie, b.obs].filter(Boolean).join(" · ");
-  const chips = lista.map(b => `<li${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}</li>`).join("");
+  const detalle = (b) => [b.desc, b.carac].filter(Boolean).join(" — ");
+  const chips = lista.map(b => `<li${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}${b.desc ? `<small>${esc(b.desc)}</small>` : ""}</li>`).join("");
   const mas = n > VISIBLES ? `<button type="button" class="rg-mas" data-id="${p.id}">${abierta ? "Ver menos" : `Ver los ${n} bienes`}</button>` : "";
   return `<article class="rg-card${p.vacante ? " vacante" : ""}">
     <div class="rg-foto">${avatar}</div>
@@ -23,7 +23,8 @@ function tarjeta(p) {
       <p class="rg-cargo">${esc(p.cargo || (p.vacante ? "Plaza vacante" : "Sin cargo registrado"))}</p>
       ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}</div>
     <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span></div>
-    <ul class="rg-bienes">${chips}</ul>${mas}</article>`;
+    <ul class="rg-bienes">${chips}</ul>
+    <div class="rg-pie">${mas}${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></article>`;
 }
 
 function pintar() {
