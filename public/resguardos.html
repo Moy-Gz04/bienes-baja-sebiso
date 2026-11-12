@@ -1,0 +1,48 @@
+<script>
+if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){ window.location.href = 'index.html'; }
+</script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<link rel="icon" href="favicon.ico">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Resguardos · Mobiliario Nuevo Edificio · SEBISO</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="css/ssidebar.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/encabezado-sistemas.css">
+<link rel="stylesheet" href="css/minisebiso-flotante.css">
+<link rel="stylesheet" href="css/asistente-extra.css">
+<link rel="stylesheet" href="css/personal-up.css">
+<link rel="stylesheet" href="css/bienes.css">
+<link rel="stylesheet" href="css/resguardos.css">
+</head>
+<body>
+<div id="sidebar-container"></div>
+<div class="contenido">
+<section class="tv">
+  <header class="tv-cabeza">
+    <div><p class="tv-eyebrow">Resguardos · Mobiliario Nuevo Edificio</p><h1>Resguardos por área y persona</h1></div>
+    <div class="b-cabeza-der"><div class="b-resumen" id="rgResumen" aria-live="polite"></div></div>
+  </header>
+
+  <div class="rg-areas" id="rgAreas" role="tablist" aria-label="Áreas"></div>
+
+  <div class="rg-barra">
+    <label class="tv-buscar"><i class="bi bi-search"></i><input type="search" id="rgBuscar" placeholder="Buscar persona, cargo, jefe inmediato o No. de inventario…" aria-label="Buscar"></label>
+    <select id="rgFoto" aria-label="Filtrar por foto"><option value="">Con y sin foto</option><option value="si">Con foto</option><option value="no">Sin foto</option></select>
+    <select id="rgTipo" aria-label="Filtrar por ocupación"><option value="">Personas y vacantes</option><option value="p">Solo personas</option><option value="v">Solo vacantes</option></select>
+  </div>
+
+  <div id="rgLista" class="rg-lista"></div>
+</section>
+</div>
+<script src="js/sidebar.js"></script>
+<script src="js/encabezado-sistemas.js"></script>
+<script src="js/resguardos.js"></script>
+<script src="js/minisebiso-flotante.js"></script>
+<script src="js/asistente-extra.js"></script>
+<script src="js/asistente-ventanas.js"></script>
+</body>
+</html>

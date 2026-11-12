@@ -9,6 +9,7 @@ window.location.pathname
 
 const PAGINAS = [
     { nombre:"Bienes", ruta:"bienes.html" },
+    { nombre:"Resguardos", ruta:"resguardos.html" },
 ];
 
 
@@ -17,6 +18,24 @@ const PAGINAS = [
 ========================= */
 
 const ICONOS_MENU = {
+
+    "Bienes": `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 8 12 3 3 8l9 5 9-5Z"/>
+            <path d="M3 8v8l9 5 9-5V8"/>
+            <path d="M12 13v8"/>
+        </svg>
+    `,
+
+    "Resguardos": `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="8" r="3.5"/>
+            <path d="M3 20a6 6 0 0 1 12 0"/>
+            <path d="m16 12 2 2 4-4"/>
+        </svg>
+    `,
 
     "Inicio": `
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"

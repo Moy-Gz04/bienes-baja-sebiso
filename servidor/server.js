@@ -194,6 +194,28 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
   } catch (e) { fallo(res, e, "No se pudieron guardar las fotos."); }
 });
 
+// ── Resguardos de Mobiliario Nuevo Edificio (personas por área, sus bienes y su foto; se cargan con cargar_resguardos.js)
+app.get("/api/resguardos", sesion, async (req, res) => {
+  if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." });
+  try {
+    const personas = await sql`SELECT id, orden, area, area_orden, seccion, nombre, vacante, cargo, jefe, (foto IS NOT NULL) AS tiene_foto FROM resguardo_personas ORDER BY orden`;
+    const bienes = await sql`SELECT persona_id, no_inventario, tipo, modelo, descripcion, serie, observaciones FROM resguardo_bienes ORDER BY persona_id, orden`;
+    const por = new Map();
+    for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones }); }
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, personas: personas.map(({ tiene_foto, ...p }) => ({ ...p, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}` : null, bienes: por.get(p.id) || [] })) });
+  } catch (e) { fallo(res, e, "No se pudieron cargar los resguardos."); }
+});
+
+app.get("/api/resguardos/:id/foto", async (req, res) => {
+  try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
+  try {
+    const [f] = await sql`SELECT foto FROM resguardo_personas WHERE id = ${Number(req.params.id) || 0}`;
+    if (!f || !f.foto) return res.status(404).end();
+    res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.foto));
+  } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
+});
+
 // ── Quitar (o regresar) un bien del apartado "Capturar datos"
 app.post("/api/bienes/:inv/omitir-captura", sesion, async (req, res) => {
   if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede cambiar este apartado." });
