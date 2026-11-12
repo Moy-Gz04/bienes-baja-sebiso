@@ -29,7 +29,7 @@ app.disable("x-powered-by");
 app.set("trust proxy", 1);
 // las fotos capturadas desde el celular llegan en un cuerpo grande; lo demás, pequeño
 const jsonChico = express.json({ limit: "100kb" }), jsonFotos = express.json({ limit: "15mb" });
-app.use((req, res, next) => (/^\/api\/bienes\/[^/]+\/fotos$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
+app.use((req, res, next) => (/^\/api\/(bienes\/[^/]+\/fotos|mudanza)$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 // Fotos tomadas en el sistema para los bienes que no tenían (3 por bien), guardadas en Neon
@@ -222,6 +222,59 @@ app.get("/api/resguardos/:id/foto", async (req, res) => {
     const [f] = await sql`SELECT foto FROM resguardo_personas WHERE id = ${Number(req.params.id) || 0}`;
     if (!f || !f.foto) return res.status(404).end();
     res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.foto));
+  } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
+});
+
+// ── Inventario · Mudanza: captura libre de bienes (inventario, descripción, serie, quién lo resguarda y su cargo, 3 fotos)
+sql`CREATE TABLE IF NOT EXISTS mudanza_inventario (
+  id SERIAL PRIMARY KEY, no_inventario TEXT NOT NULL, descripcion TEXT NOT NULL, serie TEXT NOT NULL DEFAULT '', persona TEXT NOT NULL, cargo TEXT NOT NULL DEFAULT '',
+  foto_frente BYTEA NOT NULL, foto_lado BYTEA NOT NULL, foto_etiqueta BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("No se pudo preparar mudanza_inventario:", e.message));
+const FOTOS_MUDANZA = { frente: "foto_frente", lado: "foto_lado", etiqueta: "foto_etiqueta" };
+
+app.get("/api/mudanza", sesion, async (req, res) => {
+  if (req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." });
+  try {
+    const filas = await sql`SELECT id, no_inventario, descripcion, serie, persona, cargo, quien, to_char(cuando, 'YYYY-MM-DD HH24:MI') AS cuando FROM mudanza_inventario ORDER BY id DESC`;
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, registros: filas.map(f => ({ ...f, fotos: Object.fromEntries(Object.keys(FOTOS_MUDANZA).map(k => [k, `api/mudanza/${f.id}/foto/${k}?t=${tf}`])) })) });
+  } catch (e) { fallo(res, e, "No se pudo cargar el inventario."); }
+});
+
+app.post("/api/mudanza", sesion, async (req, res) => {
+  if (req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede capturar aquí." });
+  try {
+    const t = (k, max) => String(req.body?.[k] ?? "").trim().slice(0, max);
+    const inv = t("no_inventario", 40), descripcion = t("descripcion", 200), serie = t("serie", 80), persona = t("persona", 120), cargo = t("cargo", 120);
+    if (!inv || !descripcion || !persona || !cargo) return res.status(400).json({ ok: false, mensaje: "Faltan datos: No. de inventario, descripción, persona y cargo son obligatorios." });
+    const bytes = {};
+    for (const k of Object.keys(FOTOS_MUDANZA)) {
+      const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.fotos?.[k] ?? "")), b = m ? Buffer.from(m[1], "base64") : null;
+      if (!b || b.length < 2000 || b.length > 4 * 1024 * 1024 || b[0] !== 0xff || b[1] !== 0xd8) return res.status(400).json({ ok: false, mensaje: `La foto de ${k === "lado" ? "lado" : k} falta o no es válida. Vuelve a tomarla.` });
+      bytes[k] = b;
+    }
+    const [r] = await sql`INSERT INTO mudanza_inventario (no_inventario, descripcion, serie, persona, cargo, foto_frente, foto_lado, foto_etiqueta, quien)
+      VALUES (${inv}, ${descripcion}, ${serie}, ${persona}, ${cargo}, ${bytes.frente}, ${bytes.lado}, ${bytes.etiqueta}, ${req.usuario.usuario || "—"}) RETURNING id`;
+    res.json({ ok: true, id: r.id });
+  } catch (e) { fallo(res, e, "No se pudo guardar el registro."); }
+});
+
+app.delete("/api/mudanza/:id", sesion, async (req, res) => {
+  if (req.soloComprobar || req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede borrar registros." });
+  try { await sql`DELETE FROM mudanza_inventario WHERE id = ${Number(req.params.id) || 0}`; res.json({ ok: true }); }
+  catch (e) { fallo(res, e, "No se pudo borrar el registro."); }
+});
+
+app.get("/api/mudanza/:id/foto/:tipo", async (req, res) => {
+  try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
+  const col = FOTOS_MUDANZA[req.params.tipo]; if (!col) return res.status(404).end();
+  try {
+    const id = Number(req.params.id) || 0;
+    const [f] = col === "foto_frente" ? await sql`SELECT foto_frente AS img FROM mudanza_inventario WHERE id = ${id}`
+      : col === "foto_lado" ? await sql`SELECT foto_lado AS img FROM mudanza_inventario WHERE id = ${id}`
+      : await sql`SELECT foto_etiqueta AS img FROM mudanza_inventario WHERE id = ${id}`;
+    if (!f) return res.status(404).end();
+    res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.img));
   } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
 });
 

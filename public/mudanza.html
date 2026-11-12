@@ -1,0 +1,61 @@
+<script>
+if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){ window.location.href = 'index.html'; }
+</script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<link rel="icon" href="favicon.ico">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Inventario · Mudanza · SEBISO</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="css/ssidebar.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/encabezado-sistemas.css">
+<link rel="stylesheet" href="css/minisebiso-flotante.css">
+<link rel="stylesheet" href="css/asistente-extra.css">
+<link rel="stylesheet" href="css/personal-up.css">
+<link rel="stylesheet" href="css/bienes.css">
+<link rel="stylesheet" href="css/resguardos.css">
+<link rel="stylesheet" href="css/mudanza.css">
+</head>
+<body>
+<div id="sidebar-container"></div>
+<div class="contenido">
+<section class="tv">
+  <header class="tv-cabeza">
+    <div><p class="tv-eyebrow">Inventario · Mudanza</p><h1>Captura de bienes para la mudanza</h1></div>
+    <div class="b-cabeza-der"><div class="b-resumen" id="muResumen" aria-live="polite"></div></div>
+  </header>
+
+  <form id="muForm" class="mu-form" autocomplete="off" novalidate>
+    <div class="mu-campos">
+      <label>No. de inventario<input id="muInv" inputmode="numeric" maxlength="40" required></label>
+      <label>Serie<input id="muSerie" maxlength="80" placeholder="S/S si no tiene"></label>
+      <label class="mu-ancho">Descripción<input id="muDesc" maxlength="200" required></label>
+      <label>Persona que lo resguarda<input id="muPersona" maxlength="120" required></label>
+      <label>Cargo<input id="muCargo" maxlength="120" required></label>
+    </div>
+    <div class="mu-tomas" id="muTomas">
+      <div class="mu-toma" data-k="frente"><button type="button" class="mu-foto"></button><input type="file" accept="image/*" capture="environment" hidden></div>
+      <div class="mu-toma" data-k="lado"><button type="button" class="mu-foto"></button><input type="file" accept="image/*" capture="environment" hidden></div>
+      <div class="mu-toma" data-k="etiqueta"><button type="button" class="mu-foto"></button><input type="file" accept="image/*" capture="environment" hidden></div>
+    </div>
+    <p class="mu-msg" id="muMsg" role="status"></p>
+    <div class="mu-acciones"><button type="submit" class="mu-guardar" id="muGuardar"><i class="bi bi-check2-circle"></i> Guardar bien</button><button type="button" class="mu-limpiar" id="muLimpiar">Limpiar</button></div>
+  </form>
+
+  <div class="rg-barra mu-barra">
+    <label class="tv-buscar"><i class="bi bi-search"></i><input type="search" id="muBuscar" placeholder="Buscar por inventario, descripción, serie, persona o cargo…" aria-label="Buscar"></label>
+  </div>
+  <div id="muLista" class="mu-lista"></div>
+</section>
+</div>
+<script src="js/sidebar.js"></script>
+<script src="js/encabezado-sistemas.js"></script>
+<script src="js/mudanza.js"></script>
+<script src="js/minisebiso-flotante.js"></script>
+<script src="js/asistente-extra.js"></script>
+<script src="js/asistente-ventanas.js"></script>
+</body>
+</html>

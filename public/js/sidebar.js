@@ -10,6 +10,7 @@ window.location.pathname
 const PAGINAS = [
     { nombre:"Bienes", ruta:"bienes.html" },
     { nombre:"Resguardos", ruta:"resguardos.html" },
+    { nombre:"Inventario - Mudanza", ruta:"mudanza.html" },
 ];
 
 
@@ -34,6 +35,16 @@ const ICONOS_MENU = {
             <circle cx="9" cy="8" r="3.5"/>
             <path d="M3 20a6 6 0 0 1 12 0"/>
             <path d="m16 12 2 2 4-4"/>
+        </svg>
+    `,
+
+    "Inventario - Mudanza": `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 7h12v10H2z"/>
+            <path d="M14 10h4l4 3v4h-8"/>
+            <circle cx="6" cy="18" r="1.8"/>
+            <circle cx="17" cy="18" r="1.8"/>
         </svg>
     `,
 
