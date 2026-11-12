@@ -29,7 +29,9 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   </header>
 
   <form id="muForm" class="mu-form" autocomplete="off" novalidate>
+    <p class="mu-unidad" id="muUnidadTxt" hidden></p>
     <div class="mu-campos">
+      <label class="mu-ancho" id="muUnidadW" hidden>Unidad presupuestal<select id="muUnidad"></select></label>
       <label>No. de inventario<input id="muInv" inputmode="numeric" maxlength="40" required></label>
       <label>Serie<input id="muSerie" maxlength="80" placeholder="S/S si no tiene"></label>
       <label class="mu-ancho">Descripción<input id="muDesc" maxlength="200" required></label>

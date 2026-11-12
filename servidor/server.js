@@ -62,7 +62,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad"] }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -72,13 +72,13 @@ app.post("/api/auth/login", async (req, res) => {
   if (reg.length >= 10) return res.status(429).json({ error: "Demasiados intentos. Espera unos minutos." });
   try {
     const usuario = String(req.body?.usuario || "").trim();
-    const [u] = await sql`SELECT id, usuario, password_hash, area, rol FROM usuarios WHERE usuario = ${usuario}`;
+    const [u] = await sql`SELECT id, usuario, password_hash, area, rol, unidad FROM usuarios WHERE usuario = ${usuario}`;
     if (!u || !bcrypt.compareSync(String(req.body?.password || ""), u.password_hash)) {
       intentos.set(ip, [...reg, ahora]);
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
     intentos.delete(ip);
-    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol }, SECRETO, { expiresIn: "8h" }), area: u.area, rol: u.rol });
+    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol, ...(u.unidad ? { unidad: u.unidad } : {}) }, SECRETO, { expiresIn: "8h" }), area: u.area, rol: u.rol });
   } catch (e) { fallo(res, e, "No se pudo iniciar sesión."); }
 });
 
@@ -88,6 +88,8 @@ function sesion(req, res, next) {
     if (req.usuario.proposito) throw new Error("token de otro tipo");
     req.soloCaptura = req.usuario.rol === "captura";
     req.soloComprobar = req.usuario.rol === "comprobar";   // solo ve Propuesta DIF y marca palomita / equis
+    req.soloMudanza = req.usuario.rol === "mudanza";       // solo entra a Inventario · Mudanza y solo de su unidad presupuestal
+    if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
 }
@@ -230,20 +232,35 @@ sql`CREATE TABLE IF NOT EXISTS mudanza_inventario (
   id SERIAL PRIMARY KEY, no_inventario TEXT NOT NULL, descripcion TEXT NOT NULL, serie TEXT NOT NULL DEFAULT '', persona TEXT NOT NULL, cargo TEXT NOT NULL DEFAULT '',
   foto_frente BYTEA NOT NULL, foto_lado BYTEA NOT NULL, foto_etiqueta BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar mudanza_inventario:", e.message));
+sql`ALTER TABLE mudanza_inventario ADD COLUMN IF NOT EXISTS unidad TEXT`.catch(e => console.error("mudanza unidad:", e.message));
+sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS unidad TEXT`.catch(e => console.error("usuarios unidad:", e.message));
 const FOTOS_MUDANZA = { frente: "foto_frente", lado: "foto_lado", etiqueta: "foto_etiqueta" };
+// Unidades presupuestales (cada una tiene su usuario de rol "mudanza", que solo ve y captura las suyas)
+const UNIDADES = {
+  "01": "Secretaría de Bienestar e Inclusión Social", "04": "Dirección General de Fomento Artesanal", "05": "Subsecretaría de Inclusión y Desarrollo",
+  "06": "Dirección General de Operación y Logística de Programas", "07": "Dirección General de Atención al Migrante", "08": "Dirección General de Asistencia, Atención y Protección",
+  "12": "Dirección General de Prospectiva Planeación y Evaluación de los Programas Sociales", "13": "Subsecretaría de Participación Social y Fomento Artesanal",
+  "14": "Dirección General de Inclusión para las Personas con Discapacidad", "15": "Subsecretaría de Desarrollo Social y Humano", "16": "Dirección General de Servidores del Pueblo" };
+const accesoMudanza = (req, res) => {
+  if (req.soloComprobar || (req.soloMudanza && !UNIDADES[req.usuario.unidad])) { res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." }); return false; }
+  return true;
+};
 
 app.get("/api/mudanza", sesion, async (req, res) => {
-  if (req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." });
+  if (!accesoMudanza(req, res)) return;
   try {
-    const filas = await sql`SELECT id, no_inventario, descripcion, serie, persona, cargo, quien, to_char(cuando, 'YYYY-MM-DD HH24:MI') AS cuando FROM mudanza_inventario ORDER BY id DESC`;
-    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
-    res.json({ ok: true, registros: filas.map(f => ({ ...f, fotos: Object.fromEntries(Object.keys(FOTOS_MUDANZA).map(k => [k, `api/mudanza/${f.id}/foto/${k}?t=${tf}`])) })) });
+    const u = req.soloMudanza ? req.usuario.unidad : null;
+    const filas = await sql`SELECT id, no_inventario, descripcion, serie, persona, cargo, unidad, quien, to_char(cuando, 'YYYY-MM-DD HH24:MI') AS cuando FROM mudanza_inventario WHERE (${u}::text IS NULL OR unidad = ${u}) ORDER BY id DESC`;
+    const tf = jwt.sign(u ? { proposito: "mudanza-fotos", unidad: u } : { proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, propia: u, unidades: u ? { [u]: UNIDADES[u] } : UNIDADES, registros: filas.map(f => ({ ...f, fotos: Object.fromEntries(Object.keys(FOTOS_MUDANZA).map(k => [k, `api/mudanza/${f.id}/foto/${k}?t=${tf}`])) })) });
   } catch (e) { fallo(res, e, "No se pudo cargar el inventario."); }
 });
 
 app.post("/api/mudanza", sesion, async (req, res) => {
-  if (req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede capturar aquí." });
+  if (!accesoMudanza(req, res)) return;
   try {
+    const unidad = req.soloMudanza ? req.usuario.unidad : String(req.body?.unidad || "");
+    if (!UNIDADES[unidad]) return res.status(400).json({ ok: false, mensaje: "Elige la unidad presupuestal." });
     const t = (k, max) => String(req.body?.[k] ?? "").trim().slice(0, max);
     const inv = t("no_inventario", 40), descripcion = t("descripcion", 200), serie = t("serie", 80), persona = t("persona", 120), cargo = t("cargo", 120);
     if (!inv || !descripcion || !persona || !cargo) return res.status(400).json({ ok: false, mensaje: "Faltan datos: No. de inventario, descripción, persona y cargo son obligatorios." });
@@ -253,26 +270,27 @@ app.post("/api/mudanza", sesion, async (req, res) => {
       if (!b || b.length < 2000 || b.length > 4 * 1024 * 1024 || b[0] !== 0xff || b[1] !== 0xd8) return res.status(400).json({ ok: false, mensaje: `La foto de ${k === "lado" ? "lado" : k} falta o no es válida. Vuelve a tomarla.` });
       bytes[k] = b;
     }
-    const [r] = await sql`INSERT INTO mudanza_inventario (no_inventario, descripcion, serie, persona, cargo, foto_frente, foto_lado, foto_etiqueta, quien)
-      VALUES (${inv}, ${descripcion}, ${serie}, ${persona}, ${cargo}, ${bytes.frente}, ${bytes.lado}, ${bytes.etiqueta}, ${req.usuario.usuario || "—"}) RETURNING id`;
+    const [r] = await sql`INSERT INTO mudanza_inventario (no_inventario, descripcion, serie, persona, cargo, foto_frente, foto_lado, foto_etiqueta, quien, unidad)
+      VALUES (${inv}, ${descripcion}, ${serie}, ${persona}, ${cargo}, ${bytes.frente}, ${bytes.lado}, ${bytes.etiqueta}, ${req.usuario.usuario || "—"}, ${unidad}) RETURNING id`;
     res.json({ ok: true, id: r.id });
   } catch (e) { fallo(res, e, "No se pudo guardar el registro."); }
 });
 
 app.delete("/api/mudanza/:id", sesion, async (req, res) => {
-  if (req.soloComprobar || req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario no puede borrar registros." });
-  try { await sql`DELETE FROM mudanza_inventario WHERE id = ${Number(req.params.id) || 0}`; res.json({ ok: true }); }
+  if (req.soloCaptura || !accesoMudanza(req, res)) return req.soloCaptura ? res.status(403).json({ ok: false, mensaje: "Tu usuario no puede borrar registros." }) : undefined;
+  try { const u = req.soloMudanza ? req.usuario.unidad : null; await sql`DELETE FROM mudanza_inventario WHERE id = ${Number(req.params.id) || 0} AND (${u}::text IS NULL OR unidad = ${u})`; res.json({ ok: true }); }
   catch (e) { fallo(res, e, "No se pudo borrar el registro."); }
 });
 
 app.get("/api/mudanza/:id/foto/:tipo", async (req, res) => {
-  try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
+  let u = null;
+  try { const t = jwt.verify(String(req.query.t || ""), SECRETO); if (t.proposito === "mudanza-fotos" && t.unidad) u = t.unidad; else if (t.proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
   const col = FOTOS_MUDANZA[req.params.tipo]; if (!col) return res.status(404).end();
   try {
     const id = Number(req.params.id) || 0;
-    const [f] = col === "foto_frente" ? await sql`SELECT foto_frente AS img FROM mudanza_inventario WHERE id = ${id}`
-      : col === "foto_lado" ? await sql`SELECT foto_lado AS img FROM mudanza_inventario WHERE id = ${id}`
-      : await sql`SELECT foto_etiqueta AS img FROM mudanza_inventario WHERE id = ${id}`;
+    const [f] = col === "foto_frente" ? await sql`SELECT foto_frente AS img FROM mudanza_inventario WHERE id = ${id} AND (${u}::text IS NULL OR unidad = ${u})`
+      : col === "foto_lado" ? await sql`SELECT foto_lado AS img FROM mudanza_inventario WHERE id = ${id} AND (${u}::text IS NULL OR unidad = ${u})`
+      : await sql`SELECT foto_etiqueta AS img FROM mudanza_inventario WHERE id = ${id} AND (${u}::text IS NULL OR unidad = ${u})`;
     if (!f) return res.status(404).end();
     res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.img));
   } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }

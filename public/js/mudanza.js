@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 const ROT = { frente: "Foto de frente", lado: "Foto de lado", etiqueta: "Foto de la etiqueta" };
-let REGISTROS = [];
+let REGISTROS = [], UNIDADES = {};
 const fotos = { frente: null, lado: null, etiqueta: null };
 
 function reducir(archivo) {
@@ -69,6 +69,7 @@ $("muLimpiar").addEventListener("click", () => { limpiar(); msg(""); });
 $("muForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   let falta = false;
+  if (!$("muUnidadW").hidden && !$("muUnidad").value) { $("muUnidad").classList.add("mal"); falta = true; }
   for (const id of ["muInv", "muDesc", "muPersona", "muCargo"]) { const v = !$(id).value.trim(); $(id).classList.toggle("mal", v); falta = falta || v; }
   document.querySelectorAll(".mu-foto").forEach(b => b.classList.remove("mal"));
   const sinFoto = Object.keys(fotos).filter(k => !fotos[k]);
@@ -76,7 +77,7 @@ $("muForm").addEventListener("submit", async (e) => {
   if (falta || sinFoto.length) return msg(falta ? "Completa los datos marcados." : "Faltan fotos: " + sinFoto.join(", ") + ".");
   $("muGuardar").disabled = true; msg("Guardando…");
   try {
-    const d = await api("/api/mudanza", { method: "POST", body: JSON.stringify({ no_inventario: $("muInv").value, descripcion: $("muDesc").value, serie: $("muSerie").value || "S/S", persona: $("muPersona").value, cargo: $("muCargo").value, fotos }) });
+    const d = await api("/api/mudanza", { method: "POST", body: JSON.stringify({ no_inventario: $("muInv").value, descripcion: $("muDesc").value, unidad: $("muUnidad").value, serie: $("muSerie").value || "S/S", persona: $("muPersona").value, cargo: $("muCargo").value, fotos }) });
     if (!d.ok) { msg(d.mensaje || "No se pudo guardar."); return; }
     // persona y cargo se conservan: suelen repetirse en el siguiente bien
     const p = $("muPersona").value, c = $("muCargo").value; limpiar(); $("muPersona").value = p; $("muCargo").value = c;
@@ -88,10 +89,10 @@ $("muForm").addEventListener("submit", async (e) => {
 
 function pintar() {
   const q = norm($("muBuscar").value).split(/\s+/).filter(Boolean);
-  const lista = REGISTROS.filter(r => { const i = norm([r.no_inventario, r.descripcion, r.serie, r.persona, r.cargo].join(" ")); return q.every(t => i.includes(t)); });
+  const lista = REGISTROS.filter(r => { const i = norm([r.no_inventario, r.descripcion, r.serie, r.persona, r.cargo, r.unidad].join(" ")); return q.every(t => i.includes(t)); });
   $("muResumen").innerHTML = `<div><b>${REGISTROS.length}</b>capturados</div><div><b>${new Set(REGISTROS.map(r => norm(r.persona))).size}</b>personas</div>`;
   $("muLista").innerHTML = lista.length ? lista.map(r => `<article class="mu-card">
-    <h3>${esc(r.no_inventario)}</h3><p class="d">${esc(r.descripcion)}</p><p>Serie: ${esc(r.serie || "S/S")}</p>
+    <h3>${esc(r.no_inventario)}${r.unidad && Object.keys(UNIDADES).length > 1 ? ` <small>UP ${esc(r.unidad)}</small>` : ""}</h3><p class="d">${esc(r.descripcion)}</p><p>Serie: ${esc(r.serie || "S/S")}</p>
     <p><i class="bi bi-person"></i> ${esc(r.persona)} · ${esc(r.cargo)}</p>
     <div class="mu-fotos">${["frente", "lado", "etiqueta"].map(k => `<img src="${esc(r.fotos[k])}" alt="Foto ${k}" loading="lazy" data-ver="${esc(r.fotos[k])}">`).join("")}</div>
     <div class="mu-pie"><span>${esc(r.quien)} · ${esc(r.cuando)}</span><button type="button" class="mu-borrar" data-id="${r.id}">Borrar</button></div></article>`).join("")
@@ -111,7 +112,12 @@ async function cargar() {
   try {
     const d = await api("/api/mudanza");
     if (!d.ok) { $("muLista").innerHTML = `<p class="mu-vacio">${esc(d.mensaje || "No se pudo cargar.")}</p>`; return; }
-    REGISTROS = d.registros; pintar();
+    REGISTROS = d.registros; UNIDADES = d.unidades;
+    const unica = d.propia;
+    $("muUnidadTxt").hidden = !unica; $("muUnidadW").hidden = !!unica;
+    if (unica) $("muUnidadTxt").textContent = "UP " + unica + " · " + d.unidades[unica];
+    else if (!$("muUnidad").options.length) $("muUnidad").innerHTML = '<option value="">Elige la unidad…</option>' + Object.entries(d.unidades).map(([k, v]) => `<option value="${k}">${k} · ${esc(v)}</option>`).join("");
+    pintar();
   } catch (x) { if (x.message !== "sesión") $("muLista").innerHTML = `<p class="mu-vacio">Sin conexión.</p>`; }
 }
 cargar();

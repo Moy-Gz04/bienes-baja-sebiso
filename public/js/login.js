@@ -49,7 +49,7 @@ async function login(){
             // REDIRECCIÓN
 
             window.location.href =
-            "bienes.html";
+            (data.rol === 'mudanza' ? "mudanza.html" : "bienes.html");
 
         }
 
