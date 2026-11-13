@@ -204,6 +204,19 @@ sql`CREATE TABLE IF NOT EXISTS resguardo_cambios (id SERIAL PRIMARY KEY, persona
 sql`ALTER TABLE resguardo_personas ADD COLUMN IF NOT EXISTS foto_v INT NOT NULL DEFAULT 0`.catch(e => console.error("resguardo foto_v:", e.message));
 sql`CREATE TABLE IF NOT EXISTS resguardo_correctos (no_inventario TEXT PRIMARY KEY, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("resguardo_correctos:", e.message));
+// Operaciones hechas sin internet se reenvían con un opId: si ya se aplicaron (la respuesta se perdió), se responde ok sin repetirlas.
+sql`CREATE TABLE IF NOT EXISTS resguardo_ops (op_id TEXT PRIMARY KEY, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`.catch(e => console.error("resguardo_ops:", e.message));
+app.use("/api/resguardos", async (req, res, next) => {
+  const op = req.method === "POST" ? String(req.body?.opId ?? "").slice(0, 80) : "";
+  if (!op) return next();
+  try {
+    const [ya] = await sql`SELECT 1 FROM resguardo_ops WHERE op_id = ${op}`;
+    if (ya) return res.json({ ok: true, repetida: true });
+    const json = res.json.bind(res);
+    res.json = (cuerpo) => { if (cuerpo?.ok) sql`INSERT INTO resguardo_ops (op_id) VALUES (${op}) ON CONFLICT DO NOTHING`.catch(() => {}); return json(cuerpo); };
+    next();
+  } catch (e) { next(); }
+});
 const accesoResguardos = (req, res) => {
   if (req.soloCaptura || req.soloComprobar) { res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." }); return false; }
   return true;

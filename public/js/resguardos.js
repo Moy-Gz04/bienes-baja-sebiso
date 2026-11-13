@@ -49,14 +49,113 @@ function pintarAreas() {
   }).join("");
 }
 
-async function cargar() {
-  const r = await fetch("/api/resguardos", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
-  if (r.status === 401) { localStorage.removeItem("token"); location.href = "index.html"; return; }
-  const d = await r.json();
-  if (!d.ok) { $("rgLista").innerHTML = `<p class="rg-vacio">${esc(d.mensaje || "No se pudieron cargar los resguardos.")}</p>`; return; }
-  PERSONAS = d.personas; PERSONAS.forEach(indexar);
-  pintarAreas(); pintar();
+// ── Trabajo sin internet ─────────────────────────────────────────────────────────────────────────
+// Cada cambio se guarda primero en IndexedDB (cola) y recién después se aplica en pantalla; la cola se envía en orden
+// en cuanto hay internet y un cambio solo sale de la cola cuando el servidor lo confirmó. Si el servidor lo rechaza
+// pasa a "rechazadas" (queda visible, no se borra). La lista de personas se guarda también para poder abrir sin red.
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+navigator.storage?.persist?.().catch(() => {});
+const abrirBD = () => new Promise((ok, mal) => {
+  const r = indexedDB.open("resguardos-offline", 1);
+  r.onupgradeneeded = () => { const d = r.result; d.createObjectStore("cola", { keyPath: "id", autoIncrement: true }); d.createObjectStore("rechazadas", { keyPath: "id" }); d.createObjectStore("datos"); };
+  r.onsuccess = () => ok(r.result); r.onerror = () => mal(r.error);
+});
+let _bd; const bd = () => (_bd ||= abrirBD());
+async function tx(tabla, modo, fn) {
+  const d = await bd();
+  return new Promise((ok, mal) => {
+    const t = d.transaction(tabla, modo); let res; const q = fn(t.objectStore(tabla));
+    if (q) q.onsuccess = () => { res = q.result; };
+    t.oncomplete = () => ok(res); t.onerror = t.onabort = () => mal(t.error);
+  });
 }
+const guardarCopia = () => tx("datos", "readwrite", s => s.put(PERSONAS, "personas")).catch(() => {});
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const sync = { sinRed: false, sesion: false, copia: false, enviando: false, hubo: false, pend: 0, rech: [] };
+const sinRed = () => !navigator.onLine || sync.sinRed;
+
+function pintarSync() {
+  const el = $("rgSync"), off = sinRed(), n = sync.pend, r = sync.rech;
+  let cls = "", html = "";
+  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.texto)} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="rgSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
+  else if (sync.sesion && n) { cls = "mal"; html = `<div><b><i class="bi bi-person-lock"></i> Tu sesión venció.</b> Tus ${n} cambios siguen guardados en este equipo; inicia sesión de nuevo y se enviarán solos.</div><a class="tv-btn" href="index.html">Iniciar sesión</a>`; }
+  else if (off) { cls = "off"; html = `<div><b><i class="bi bi-wifi-off"></i> Sin internet.</b> Puedes seguir trabajando${n ? `; hay ${n} ${n === 1 ? "cambio guardado" : "cambios guardados"} en este equipo` : ""} y se enviarán solos cuando vuelva.</div>`; }
+  else if (n) { cls = "env"; html = `<div><b><i class="bi bi-cloud-arrow-up"></i> Enviando ${n} ${n === 1 ? "cambio" : "cambios"}…</b> Están guardados en este equipo.</div>`; }
+  else if (sync.copia) { cls = "off"; html = `<div><b><i class="bi bi-hdd"></i> Mostrando la última copia guardada.</b> No se pudo conectar con el servidor; se actualizará sola.</div>`; }
+  el.hidden = !html; el.className = "rg-sync " + cls; el.innerHTML = html;
+}
+async function refrescarSync() {
+  try { sync.pend = await tx("cola", "readonly", s => s.count()); sync.rech = await tx("rechazadas", "readonly", s => s.getAll()); } catch (e) {}
+  pintarSync();
+}
+const permanente = (s) => s >= 400 && s < 500 && ![401, 408, 425, 429].includes(s);
+
+async function enviarCola() {
+  if (sync.enviando) return; sync.enviando = true; sync.sesion = false;
+  try {
+    for (;;) {
+      const op = (await tx("cola", "readonly", s => s.getAll()))[0]; if (!op) break;
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
+      let r;
+      try { r = await fetch(op.ruta, { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify({ ...op.cuerpo, opId: op.opId }) }); }
+      catch (e) { sync.sinRed = true; break; } finally { clearTimeout(t); }
+      if (r.status === 401) { sync.sesion = true; break; }
+      if (r.status >= 500 || !(r.ok || permanente(r.status))) { sync.sinRed = true; break; }   // servidor dormido o saturado: se reintenta
+      sync.sinRed = false;
+      const d = await r.json().catch(() => null);
+      if (d?.ok) {
+        await tx("cola", "readwrite", s => s.delete(op.id));
+        const p = op.tipo === "foto" && d.foto ? porId(op.persona) : null;
+        if (p && String(p.foto).startsWith("data:")) { p.foto = d.foto; pintar(); if ($("rgDlg").open) pintarDlg(); guardarCopia(); }
+      } else {
+        await tx("rechazadas", "readwrite", s => s.put({ ...op, mensaje: d?.mensaje || "El servidor lo rechazó.", cuando: Date.now() }));   // primero se guarda, luego sale de la cola
+        await tx("cola", "readwrite", s => s.delete(op.id)); sync.hubo = true;
+      }
+      await refrescarSync();
+    }
+  } catch (e) { sync.sinRed = true; }
+  sync.enviando = false; await refrescarSync();
+  if (sync.hubo && !sync.pend) { sync.hubo = false; cargar(); }   // hubo rechazos: se vuelve a leer lo real del servidor
+}
+
+// Guarda el cambio en la cola; solo si quedó guardado se aplica en pantalla.
+async function cambiar(op, aplicar) {
+  try { await tx("cola", "readwrite", s => s.add({ ...op, opId: uid(), creada: Date.now() })); } catch (e) { return false; }
+  aplicar(); await guardarCopia(); await refrescarSync(); enviarCola();
+  return true;
+}
+const sufijoRed = () => sinRed() ? " Sin internet: se guardó en este equipo y se enviará solo." : "";
+
+async function cargar() {
+  await enviarCola();
+  let d = null;
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch("/api/resguardos", { signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token") } }).finally(() => clearTimeout(t));
+    if (r.status === 401) { sync.sesion = true; if (!sync.pend) { localStorage.removeItem("token"); location.href = "index.html"; return; } }
+    else d = await r.json();
+  } catch (e) { sync.sinRed = true; }
+  await refrescarSync();
+  const copia = await tx("datos", "readonly", s => s.get("personas")).catch(() => null);
+  if (d?.ok && !sync.pend) { PERSONAS = d.personas; sync.copia = false; sync.sinRed = false; guardarCopia(); }
+  else if (PERSONAS.length) { sync.copia = !d?.ok; }
+  else if (copia?.length) { PERSONAS = copia; sync.copia = !d?.ok; }
+  else if (d?.ok) { PERSONAS = d.personas; }
+  else { $("rgLista").innerHTML = `<p class="rg-vacio">${esc(d?.mensaje || "Sin internet y todavía no hay datos guardados en este equipo. Abre esta página una vez con internet.")}</p>`; pintarSync(); return; }
+  PERSONAS.forEach(indexar);
+  pintarAreas(); pintar(); pintarSync();
+  if ($("rgDlg").open) pintarDlg();
+}
+{ const b = document.createElement("div"); b.id = "rgSync"; b.className = "rg-sync"; b.hidden = true; b.setAttribute("role", "status"); b.setAttribute("aria-live", "polite"); $("rgAreas").before(b);
+  b.addEventListener("click", async (e) => {
+    if (!e.target.closest("#rgSyncReintentar")) return;
+    for (const x of sync.rech) { const { id, mensaje, cuando, ...op } = x; await tx("cola", "readwrite", s => s.add(op)); await tx("rechazadas", "readwrite", s => s.delete(id)); }
+    await refrescarSync(); enviarCola();
+  }); }
+window.addEventListener("online", () => { sync.sinRed = false; pintarSync(); enviarCola().then(() => { if (sync.copia && !sync.pend) cargar(); }); });
+window.addEventListener("offline", pintarSync);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) enviarCola(); });
+setInterval(() => { if (sync.pend || sync.sesion === false && sync.sinRed) enviarCola(); if (sync.copia && !sync.pend && !sync.enviando) cargar(); }, 15000);
 
 $("rgAreas").addEventListener("click", (e) => { const b = e.target.closest("[data-area]"); if (!b) return; estado.area = b.dataset.area; pintarAreas(); pintar(); });
 $("rgLista").addEventListener("click", (e) => {
@@ -73,11 +172,6 @@ $("rgLista").addEventListener("click", (e) => {
 const dlg = { id: 0, mover: null, area: "", msg: "", ok: true, ocupado: false };
 const porId = (id) => PERSONAS.find(p => p.id === id);
 function indexar(p) { p.indice = norm([p.nombre, p.cargo, p.jefe, p.seccion, p.area, ...p.bienes.flatMap(b => [b.inv, b.desc, b.tipo, b.serie])].join(" ")); }
-async function api(ruta, cuerpo) {
-  const r = await fetch(ruta, { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
-  if (r.status === 401) { localStorage.removeItem("token"); location.href = "index.html"; throw new Error("sesión"); }
-  return r.json().catch(() => ({ ok: false, mensaje: "El servidor no respondió. Intenta de nuevo." }));
-}
 function reducir(archivo) {
   return new Promise((ok, mal) => {
     const url = URL.createObjectURL(archivo), img = new Image();
@@ -152,14 +246,13 @@ async function mover() {
   const destino = Number($("rgMovPersona").value), o = porId(dlg.id), d = porId(destino), inv = dlg.mover;
   if (!d) { aviso("Elige a la persona que recibirá el bien.", false); return pintarDlg(); }
   dlg.ocupado = true; pintarDlg();
-  const r = await api("/api/resguardos/mover", { origen: o.id, destino, inv }).catch(() => ({ ok: false, mensaje: "No hay conexión. Intenta de nuevo." }));
-  dlg.ocupado = false;
-  if (r.ok) {
+  const ok = await cambiar({ tipo: "mover", ruta: "/api/resguardos/mover", cuerpo: { origen: o.id, destino, inv }, persona: o.id, texto: `Mover ${inv} de ${o.nombre} a ${d.nombre}` }, () => {
     const i = o.bienes.findIndex(b => b.inv === inv), [b] = o.bienes.splice(i, 1);
-    d.bienes.push(b); o.por_actualizar = d.por_actualizar = true; indexar(o); indexar(d);
-    dlg.mover = null; aviso(`Listo: el ${inv} pasó a ${d.nombre}.`);
+    d.bienes.push(b); o.por_actualizar = d.por_actualizar = true; indexar(o); indexar(d); dlg.mover = null;
     pintarAreas(); pintar();
-  } else aviso(r.mensaje || "No se pudo mover el bien.", false);
+  });
+  dlg.ocupado = false;
+  aviso(ok ? `Listo: el ${inv} pasó a ${d.nombre}.${sufijoRed()}` : "No se pudo guardar el cambio en este equipo. Intenta de nuevo.", ok);
   pintarDlg();
 }
 
@@ -168,22 +261,23 @@ async function registrar(form) {
   const avisoSolo = (t) => { aviso(t, false); const m = $("rgDlgCuerpo").querySelector(".rg-d-msg"); m.textContent = t; m.classList.add("mal"); };
   if (f.nombre.trim().length < 5 || !f.cargo.trim()) return avisoSolo("Escribe el nombre completo y el cargo.");
   dlg.ocupado = true; form.querySelector("button[type=submit]").disabled = true;
-  const r = await api(`/api/resguardos/${dlg.id}/persona`, f).catch(() => ({ ok: false, mensaje: "No hay conexión. Intenta de nuevo." }));
+  const t = (v) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 120), p = porId(dlg.id), datos = { nombre: t(f.nombre), cargo: t(f.cargo), jefe: t(f.jefe) || null };
+  const ok = await cambiar({ tipo: "persona", ruta: `/api/resguardos/${p.id}/persona`, cuerpo: f, persona: p.id, texto: `Registrar a ${datos.nombre} en la vacante «${p.nombre}»` }, () => { Object.assign(p, datos, { vacante: false, por_actualizar: true }); indexar(p); pintar(); });
   dlg.ocupado = false;
-  if (r.ok) { const p = porId(dlg.id); Object.assign(p, r.persona, { por_actualizar: true }); indexar(p); aviso(`Se registró a ${p.nombre}.`); pintar(); pintarDlg(); }
-  else { form.querySelector("button[type=submit]").disabled = false; avisoSolo(r.mensaje || "No se pudo registrar."); }
+  if (ok) { aviso(`Se registró a ${p.nombre}.${sufijoRed()}`); pintarDlg(); }
+  else { form.querySelector("button[type=submit]").disabled = false; avisoSolo("No se pudo guardar el cambio en este equipo. Intenta de nuevo."); }
 }
 
 async function marcarCorrecto(inv) {
   const b = porId(dlg.id).bienes.find(x => x.inv === inv); if (!b) return;
   const nuevo = !b.ok;
   dlg.ocupado = true; pintarDlg();
-  const r = await api("/api/resguardos/correcto", { inv, correcto: nuevo }).catch(() => ({ ok: false, mensaje: "No hay conexión. Intenta de nuevo." }));
-  dlg.ocupado = false;
-  if (r.ok) {
+  const ok = await cambiar({ tipo: "correcto", ruta: "/api/resguardos/correcto", cuerpo: { inv, correcto: nuevo }, persona: dlg.id, texto: `${nuevo ? "Marcar" : "Quitar"} correcto el ${inv}` }, () => {
     for (const q of PERSONAS) for (const x of q.bienes) if (x.inv === inv) x.ok = nuevo;
-    aviso(nuevo ? `El ${inv} quedó marcado como correcto.` : `Se quitó la marca de correcto al ${inv}.`); pintar();
-  } else aviso(r.mensaje || "No se pudo guardar la marca.", false);
+    pintar();
+  });
+  dlg.ocupado = false;
+  aviso(ok ? (nuevo ? `El ${inv} quedó marcado como correcto.` : `Se quitó la marca de correcto al ${inv}.`) + sufijoRed() : "No se pudo guardar la marca en este equipo. Intenta de nuevo.", ok);
   pintarDlg();
 }
 
@@ -198,11 +292,12 @@ $("rgDlgCuerpo").addEventListener("change", (e) => { if (e.target.id === "rgMovA
 $("rgDlgCuerpo").addEventListener("submit", (e) => { if (e.target.id === "rgReg") { e.preventDefault(); registrar(e.target); } });
 $("rgFotoArchivo").addEventListener("change", async (e) => {
   const archivo = e.target.files[0]; e.target.value = ""; if (!archivo) return;
-  dlg.ocupado = true; aviso("Subiendo foto…"); pintarDlg();
+  dlg.ocupado = true; aviso("Guardando foto…"); pintarDlg();
   try {
-    const r = await api(`/api/resguardos/${dlg.id}/foto`, { foto: await reducir(archivo) });
-    if (r.ok) { porId(dlg.id).foto = r.foto; aviso("Foto actualizada."); pintar(); } else aviso(r.mensaje || "No se pudo guardar la foto.", false);
-  } catch (err) { aviso("No se pudo leer o subir la foto. Prueba con otra.", false); }
+    const url = await reducir(archivo), p = porId(dlg.id);
+    const ok = await cambiar({ tipo: "foto", ruta: `/api/resguardos/${p.id}/foto`, cuerpo: { foto: url }, persona: p.id, texto: `Cambiar la foto de ${p.nombre}` }, () => { p.foto = url; pintar(); });
+    aviso(ok ? "Foto actualizada." + sufijoRed() : "No se pudo guardar la foto en este equipo.", ok);
+  } catch (err) { aviso("No se pudo leer la foto. Prueba con otra.", false); }
   dlg.ocupado = false; pintarDlg();
 });
 const dlgEl = $("rgDlg");

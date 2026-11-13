@@ -97,3 +97,12 @@
   .rg-d-foto img, .rg-d-foto .rg-ini{ width:84px; height:84px; }
   .rg-reg-campos, .rg-mover{ grid-template-columns:1fr; }
 }
+
+.rg-sync{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 12px; padding:10px 14px; border-radius:12px; font-size:12.5px; font-weight:500; line-height:1.4; background:var(--suave); color:var(--txt); }
+.rg-sync[hidden]{ display:none; }
+.rg-sync b{ font-weight:800; }
+.rg-sync ul{ margin:6px 0 0; padding-left:18px; }
+.rg-sync .tv-btn{ flex:none; padding:6px 12px; font-size:12px; text-decoration:none; }
+.rg-sync.off{ background:#FFF4DC; color:#8A5A00; }
+.rg-sync.mal{ background:#FBEAEA; color:#A32D2D; }
+.rg-sync.env{ background:#E8F1FB; color:#1D4F86; }
