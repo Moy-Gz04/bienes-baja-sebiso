@@ -29,7 +29,7 @@ app.disable("x-powered-by");
 app.set("trust proxy", 1);
 // las fotos capturadas desde el celular llegan en un cuerpo grande; lo demás, pequeño
 const jsonChico = express.json({ limit: "100kb" }), jsonFotos = express.json({ limit: "15mb" });
-app.use((req, res, next) => (/^\/api\/(bienes\/[^/]+\/fotos|mudanza)$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
+app.use((req, res, next) => (/^\/api\/(bienes\/[^/]+\/fotos|mudanza|resguardos\/\d+\/foto)$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 // Fotos tomadas en el sistema para los bienes que no tenían (3 por bien), guardadas en Neon
@@ -197,16 +197,75 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
 });
 
 // ── Resguardos de Mobiliario Nuevo Edificio (personas por área, sus bienes y su foto; se cargan con cargar_resguardos.js)
+// Cambios hechos desde el sistema (mover bien, foto, registrar en vacante). cargar_resguardos.js no recarga si hay cambios aquí.
+sql`CREATE TABLE IF NOT EXISTS resguardo_cambios (id SERIAL PRIMARY KEY, persona_id INT NOT NULL, tipo TEXT NOT NULL, detalle JSONB NOT NULL DEFAULT '{}', quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("resguardo_cambios:", e.message));
+sql`ALTER TABLE resguardo_personas ADD COLUMN IF NOT EXISTS foto_v INT NOT NULL DEFAULT 0`.catch(e => console.error("resguardo foto_v:", e.message));
+const accesoResguardos = (req, res) => {
+  if (req.soloCaptura || req.soloComprobar) { res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." }); return false; }
+  return true;
+};
+const cambio = (persona, tipo, detalle, quien) => sql`INSERT INTO resguardo_cambios (persona_id, tipo, detalle, quien) VALUES (${persona}, ${tipo}, ${JSON.stringify(detalle)}::jsonb, ${quien || "—"})`;
+
 app.get("/api/resguardos", sesion, async (req, res) => {
-  if (req.soloCaptura || req.soloComprobar) return res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." });
+  if (!accesoResguardos(req, res)) return;
   try {
-    const personas = await sql`SELECT id, orden, area, area_orden, seccion, nombre, vacante, cargo, jefe, (foto IS NOT NULL) AS tiene_foto, EXISTS (SELECT 1 FROM resguardo_pdfs d WHERE d.persona_id = resguardo_personas.id) AS tiene_pdf FROM resguardo_personas ORDER BY orden`;
+    const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto IS NOT NULL) AS tiene_foto, (d.persona_id IS NOT NULL) AS tiene_pdf,
+      EXISTS (SELECT 1 FROM resguardo_cambios c WHERE c.persona_id = p.id AND c.tipo <> 'foto' AND c.cuando > COALESCE(d.cuando, 'epoch')) AS por_actualizar
+      FROM resguardo_personas p LEFT JOIN resguardo_pdfs d ON d.persona_id = p.id ORDER BY p.orden`;
     const bienes = await sql`SELECT persona_id, no_inventario, tipo, modelo, descripcion, serie, observaciones, marca, caracteristicas FROM resguardo_bienes ORDER BY persona_id, orden`;
     const por = new Map();
     for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones, marca: b.marca, carac: b.caracteristicas }); }
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" }), tr = jwt.sign({ proposito: "resguardo" }, SECRETO, { expiresIn: "8h" });
-    res.json({ ok: true, personas: personas.map(({ tiene_foto, tiene_pdf, ...p }) => ({ ...p, resguardo: tiene_pdf ? `api/resguardos/${p.id}/pdf?t=${tr}` : null, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}` : null, bienes: por.get(p.id) || [] })) });
+    res.json({ ok: true, personas: personas.map(({ tiene_foto, tiene_pdf, foto_v, ...p }) => ({ ...p, resguardo: tiene_pdf ? `api/resguardos/${p.id}/pdf?t=${tr}` : null, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}&v=${foto_v}` : null, bienes: por.get(p.id) || [] })) });
   } catch (e) { fallo(res, e, "No se pudieron cargar los resguardos."); }
+});
+
+// Mover un No. de inventario de una persona a otra (queda al final de la lista del destino)
+app.post("/api/resguardos/mover", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const origen = Number(req.body?.origen) || 0, destino = Number(req.body?.destino) || 0, inv = String(req.body?.inv ?? "").trim();
+    if (!inv || !origen || !destino || origen === destino) return res.status(400).json({ ok: false, mensaje: "Elige a la persona que recibirá el bien." });
+    const [o] = await sql`SELECT nombre FROM resguardo_personas WHERE id = ${origen}`, [d] = await sql`SELECT nombre FROM resguardo_personas WHERE id = ${destino}`;
+    if (!o || !d) return res.status(404).json({ ok: false, mensaje: "La persona ya no existe. Recarga la página." });
+    const [b] = await sql`UPDATE resguardo_bienes SET persona_id = ${destino}, orden = (SELECT COALESCE(max(orden), -1) + 1 FROM resguardo_bienes WHERE persona_id = ${destino})
+      WHERE id = (SELECT id FROM resguardo_bienes WHERE persona_id = ${origen} AND no_inventario = ${inv} ORDER BY orden LIMIT 1) RETURNING id`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: "Ese bien ya no está con esta persona. Recarga la página." });
+    const quien = req.usuario.usuario, det = { inv, de: origen, a: destino, de_nombre: o.nombre, a_nombre: d.nombre };
+    await cambio(origen, "sale", det, quien); await cambio(destino, "entra", det, quien);
+    res.json({ ok: true });
+  } catch (e) { fallo(res, e, "No se pudo mover el bien."); }
+});
+
+// Registrar a una persona en una vacante
+app.post("/api/resguardos/:id/persona", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const id = Number(req.params.id) || 0, t = (k, max) => String(req.body?.[k] ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+    const nombre = t("nombre", 120), cargo = t("cargo", 120), jefe = t("jefe", 120);
+    if (nombre.length < 5 || !cargo) return res.status(400).json({ ok: false, mensaje: "Escribe el nombre completo y el cargo." });
+    const [antes] = await sql`SELECT nombre FROM resguardo_personas WHERE id = ${id} AND vacante`;
+    if (!antes) return res.status(404).json({ ok: false, mensaje: "Esta plaza ya no está vacante. Recarga la página." });
+    await sql`UPDATE resguardo_personas SET nombre = ${nombre}, cargo = ${cargo}, jefe = ${jefe || null}, vacante = FALSE WHERE id = ${id}`;
+    await cambio(id, "registro", { antes: antes.nombre, nombre, cargo, jefe }, req.usuario.usuario);
+    res.json({ ok: true, persona: { nombre, cargo, jefe: jefe || null, vacante: false } });
+  } catch (e) { fallo(res, e, "No se pudo registrar a la persona."); }
+});
+
+// Cambiar la foto de la persona (JPEG reducido en el navegador)
+app.post("/api/resguardos/:id/foto", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const id = Number(req.params.id) || 0;
+    const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.foto ?? "")), b = m ? Buffer.from(m[1], "base64") : null;
+    if (!b || b.length < 2000 || b.length > 4 * 1024 * 1024 || b[0] !== 0xff || b[1] !== 0xd8) return res.status(400).json({ ok: false, mensaje: "La foto no es válida. Elige otra." });
+    const [r] = await sql`UPDATE resguardo_personas SET foto = ${b}, foto_v = foto_v + 1 WHERE id = ${id} RETURNING foto_v`;
+    if (!r) return res.status(404).json({ ok: false, mensaje: "La persona ya no existe." });
+    await cambio(id, "foto", {}, req.usuario.usuario);
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, foto: `api/resguardos/${id}/foto?t=${tf}&v=${r.foto_v}` });
+  } catch (e) { fallo(res, e, "No se pudo guardar la foto."); }
 });
 
 app.get("/api/resguardos/:id/pdf", async (req, res) => {

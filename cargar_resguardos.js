@@ -36,6 +36,9 @@ const AREAS = [...new Set(personas.map(p => p.area))];
     drive_carpeta TEXT, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`;
   await sql`CREATE INDEX IF NOT EXISTS resguardo_bienes_persona ON resguardo_bienes (persona_id)`;
   // los PDF ya generados se conservan: se guardan aparte y se vuelven a enlazar
+  // los cambios hechos desde el sistema (bienes movidos, fotos, vacantes registradas) se perderían al recargar
+  const [hc] = await sql`SELECT count(*)::int n FROM resguardo_cambios`.catch(() => [{ n: 0 }]);
+  if (hc.n && process.env.FORZAR_RECARGA !== "1") { console.error(`Hay ${hc.n} cambios hechos desde el sistema (tabla resguardo_cambios); recargar los borraría. Usa FORZAR_RECARGA=1 si de verdad quieres reemplazarlos.`); process.exit(1); }
   const pdfs = await sql`SELECT persona_id, nombre, pdf, drive_carpeta FROM resguardo_pdfs`.catch(() => []);
   await sql`DELETE FROM resguardo_personas`;
   for (const p of personas) {

@@ -37,6 +37,11 @@ if(localStorage.getItem('rol') === 'mudanza'){ window.location.href = 'mudanza.h
   </div>
 
   <div id="rgLista" class="rg-lista"></div>
+<dialog class="tv-dialogo rg-dlg" id="rgDlg" aria-labelledby="rgDlgNombre">
+  <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+  <div id="rgDlgCuerpo"></div>
+  <input type="file" id="rgFotoArchivo" accept="image/*" hidden>
+</dialog>
 </section>
 </div>
 <script src="js/sidebar.js"></script>
