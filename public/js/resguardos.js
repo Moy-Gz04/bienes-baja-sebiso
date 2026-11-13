@@ -174,7 +174,7 @@ $("rgLista").addEventListener("click", (e) => {
   const chip = e.target.closest("[data-inv]");
   abrirPersona(Number(card.dataset.persona), chip ? chip.dataset.inv : null);
 });
-["rgBuscar", "rgFoto", "rgTipo", "rgEstado"].forEach(id => $(id).addEventListener("input", pintar));
+["rgBuscar", "rgFoto", "rgTipo", "rgEstado"].forEach(id => $(id).addEventListener("input", (e) => { if (e.target.tagName === "SELECT") e.target.classList.toggle("activo", !!e.target.value); pintar(); }));
 
 // ── Ventana de la persona: mover un No. de inventario a otra persona, cambiar la foto y registrar a alguien en una vacante
 const dlg = { id: 0, editar: false, mover: null, area: "", msg: "", ok: true, ocupado: false };

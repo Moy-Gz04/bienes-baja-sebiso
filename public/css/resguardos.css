@@ -124,3 +124,20 @@
 .rg-punto{ position:absolute; top:9px; right:9px; width:10px; height:10px; border-radius:50%; background:#d62828; box-shadow:0 0 0 0 rgba(214,40,40,.6); animation:rg-parpadeo 1.2s ease-in-out infinite; }
 @keyframes rg-parpadeo{ 0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(214,40,40,.55); } 50%{ opacity:.35; box-shadow:0 0 0 6px rgba(214,40,40,0); } }
 @media (prefers-reduced-motion:reduce){ .rg-punto{ animation:none; } }
+
+/* Barra de búsqueda y desplegables con formato del sistema */
+.rg-barra{ align-items:stretch; padding:10px; border:1.5px solid var(--borde); border-radius:14px; background:linear-gradient(180deg,#fff, #FDFBF8); box-shadow:0 2px 10px rgba(95,33,50,.05); }
+.rg-barra .tv-buscar{ height:44px; padding:0 14px; border-radius:11px; background:#fff; transition:border-color .15s, box-shadow .15s; }
+.rg-barra .tv-buscar i{ color:var(--g); font-size:15px; }
+.rg-barra .tv-buscar input{ padding:0; height:100%; font-size:13.5px; color:var(--txt); }
+.rg-barra .tv-buscar input::placeholder{ color:var(--txt2); opacity:.75; }
+.rg-barra .tv-buscar input::-webkit-search-cancel-button{ cursor:pointer; }
+.rg-barra .tv-buscar:hover{ border-color:var(--d); }
+.rg-barra select{ height:44px; padding:0 34px 0 12px; border-radius:11px; font-weight:600; font-size:12.5px; cursor:pointer; text-overflow:ellipsis;
+  -webkit-appearance:none; appearance:none;
+  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%235F2132' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 6l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 12px center;
+  transition:border-color .15s, box-shadow .15s, background-color .15s; }
+.rg-barra select:hover{ border-color:var(--d); }
+.rg-barra select.activo{ border-color:var(--g); background-color:var(--suave); color:var(--g); }
+.rg-barra select option{ font-weight:500; color:var(--txt); background:#fff; }
+@media (max-width:700px){ .rg-barra{ padding:8px; } .rg-barra select, .rg-barra .tv-buscar{ height:40px; } }
