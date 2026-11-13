@@ -227,7 +227,7 @@ app.get("/api/resguardos", sesion, async (req, res) => {
   if (!accesoResguardos(req, res)) return;
   try {
     const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto IS NOT NULL) AS tiene_foto, (d.persona_id IS NOT NULL) AS tiene_pdf,
-      EXISTS (SELECT 1 FROM resguardo_cambios c WHERE c.persona_id = p.id AND c.tipo <> 'foto' AND c.cuando > COALESCE(d.cuando, 'epoch')) AS por_actualizar
+      EXISTS (SELECT 1 FROM resguardo_cambios c WHERE c.persona_id = p.id AND c.tipo NOT IN ('foto', 'alta_vacante') AND c.cuando > COALESCE(d.cuando, 'epoch')) AS por_actualizar
       FROM resguardo_personas p LEFT JOIN resguardo_pdfs d ON d.persona_id = p.id ORDER BY p.orden`;
     const bienes = await sql`SELECT b.persona_id, b.no_inventario, b.tipo, b.modelo, b.descripcion, b.serie, b.observaciones, b.marca, b.caracteristicas, (c.no_inventario IS NOT NULL) AS correcto
       FROM resguardo_bienes b LEFT JOIN resguardo_correctos c ON c.no_inventario = b.no_inventario ORDER BY b.persona_id, b.orden`;
@@ -282,6 +282,38 @@ app.post("/api/resguardos/:id/editar", sesion, async (req, res) => {
     await cambio(id, "edicion", { antes, nombre, cargo, jefe }, req.usuario.usuario);
     res.json({ ok: true });
   } catch (e) { fallo(res, e, "No se pudo guardar el cambio."); }
+});
+
+// Agregar una vacante a un área (el id lo propone el navegador para que funcione sin internet; la cola es idempotente)
+app.post("/api/resguardos/vacante", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const id = Number(req.body?.id) || 0, area = String(req.body?.area ?? "").trim(), seccion = String(req.body?.seccion ?? "").trim(), nombre = String(req.body?.nombre ?? "").trim().slice(0, 120) || "Vacante";
+    if (!Number.isInteger(id) || id < 1000000 || id > 2000000000) return res.status(400).json({ ok: false, mensaje: "Identificador inválido." });
+    const [ref] = await sql`SELECT area_orden, seccion FROM resguardo_personas WHERE area = ${area} ORDER BY (seccion = ${seccion}) DESC, orden DESC LIMIT 1`;
+    if (!ref) return res.status(404).json({ ok: false, mensaje: "El área no existe. Recarga la página." });
+    const [ya] = await sql`SELECT area FROM resguardo_personas WHERE id = ${id}`;
+    if (ya) return res.json({ ok: true });
+    await sql`INSERT INTO resguardo_personas (id, orden, area, area_orden, seccion, nombre, vacante) VALUES
+      (${id}, (SELECT COALESCE(max(orden), 0) + 1 FROM resguardo_personas), ${area}, ${ref.area_orden}, ${ref.seccion}, ${nombre}, TRUE)`;
+    await cambio(id, "alta_vacante", { area, seccion: ref.seccion, nombre }, req.usuario.usuario);
+    res.json({ ok: true });
+  } catch (e) { fallo(res, e, "No se pudo agregar la vacante."); }
+});
+
+// Eliminar una vacante (solo si no tiene bienes)
+app.post("/api/resguardos/:id/eliminar", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const id = Number(req.params.id) || 0;
+    const [p] = await sql`SELECT area, seccion, nombre, vacante, (SELECT count(*)::int FROM resguardo_bienes WHERE persona_id = ${id}) AS n FROM resguardo_personas WHERE id = ${id}`;
+    if (!p) return res.json({ ok: true });
+    if (!p.vacante) return res.status(400).json({ ok: false, mensaje: "Solo se pueden eliminar plazas vacantes." });
+    if (p.n) return res.status(400).json({ ok: false, mensaje: `La vacante tiene ${p.n} ${p.n === 1 ? "bien" : "bienes"}; muévelos antes de eliminarla.` });
+    await sql`DELETE FROM resguardo_personas WHERE id = ${id} AND vacante`;
+    await cambio(id, "baja_vacante", { area: p.area, seccion: p.seccion, nombre: p.nombre }, req.usuario.usuario);
+    res.json({ ok: true });
+  } catch (e) { fallo(res, e, "No se pudo eliminar la vacante."); }
 });
 
 // Registrar a una persona en una vacante

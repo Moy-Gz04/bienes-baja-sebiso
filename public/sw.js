@@ -1,7 +1,7 @@
 // Service worker: deja abrir y operar el apartado Resguardos sin internet.
 // Estáticos: red primero (para recibir actualizaciones) y, si no hay red, la copia guardada.
 // Los cambios del usuario NO pasan por aquí: los guarda resguardos.js en IndexedDB.
-const CACHE = "rg-offline-v2";
+const CACHE = "rg-offline-v3";
 const PRECARGA = ["resguardos.html", "js/resguardos.js", "js/sidebar.js", "js/encabezado-sistemas.js", "js/minisebiso-flotante.js", "js/asistente-extra.js", "js/asistente-ventanas.js",
   "css/resguardos.css", "css/ssidebar.css", "css/encabezado-sistemas.css", "css/minisebiso-flotante.css", "css/asistente-extra.css", "css/personal-up.css", "css/bienes.css", "favicon.ico"];
 const FOTO = /^\/api\/resguardos\/\d+\/foto$/;

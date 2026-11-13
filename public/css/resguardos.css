@@ -141,3 +141,18 @@
 .rg-barra select.activo{ border-color:var(--g); background-color:var(--suave); color:var(--g); }
 .rg-barra select option{ font-weight:500; color:var(--txt); background:#fff; }
 @media (max-width:700px){ .rg-barra{ padding:8px; } .rg-barra select, .rg-barra .tv-buscar{ height:40px; } }
+
+/* Agregar y eliminar vacantes */
+.rg-agregar{ display:flex; align-items:center; justify-content:center; gap:8px; min-height:96px; padding:12px; border:1.5px dashed var(--d); border-radius:14px; background:#FDFBF8; color:var(--g); font:700 13px 'Montserrat',sans-serif; cursor:pointer; transition:border-color .15s, background-color .15s, box-shadow .15s; }
+.rg-agregar i{ display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:var(--suave); font-size:16px; }
+.rg-agregar:hover{ border-color:var(--g); background:#fff; box-shadow:0 4px 14px rgba(95,33,50,.08); }
+.rg-agregar:focus-visible{ outline:2px solid var(--g); outline-offset:2px; }
+.rg-borrar{ padding:5px 9px; font-size:12px; color:#A32D2D; }
+.rg-borrar:hover, .rg-btn-borrar:hover:not(:disabled){ border-color:#A32D2D; color:#A32D2D; }
+.rg-btn-borrar{ color:#A32D2D; }
+.rg-btn-borrar:disabled{ opacity:.45; cursor:not-allowed; }
+.rg-btn-borrar.on, .rg-btn-borrar.on:hover:not(:disabled){ background:#A32D2D; border-color:#A32D2D; color:#fff; }
+.rg-confirmar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding:12px 14px; border:1.5px solid #E7B9B9; border-radius:12px; background:#FDF3F3; }
+.rg-confirmar p{ margin:0; font-size:13px; color:#7A1F1F; }
+.rg-confirmar div{ display:flex; gap:8px; }
+.rg-confirmar .tv-btn{ padding:6px 12px; font-size:12px; }

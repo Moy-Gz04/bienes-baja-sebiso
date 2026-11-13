@@ -27,7 +27,7 @@ function tarjeta(p) {
       ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}</div>
     <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span></div>
     <ul class="rg-bienes">${chips}</ul>
-    <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></article>`;
+    <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}${p.vacante && !n ? `<button type="button" class="tv-btn rg-borrar" data-borrar="${p.id}" title="Eliminar vacante" aria-label="Eliminar ${esc(p.nombre)}"><i class="bi bi-trash3"></i></button>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></article>`;
 }
 
 function pintar() {
@@ -39,11 +39,11 @@ function pintar() {
   $("rgLista").innerHTML = lista.length ? [...porArea].map(([area, secs]) => {
     const total = [...secs.values()].flat(), vac = total.filter(p => p.vacante);
     const bloques = [...secs].map(([sec, ps]) => [sec, ps.filter(p => !p.vacante), false]).filter(([, ps]) => ps.length);
-    if (vac.length) bloques.push(["Vacantes", vac, true]);
+    bloques.push(["Vacantes", vac, true]);
     return `<section class="rg-area"><header><h2>${esc(area)}</h2><span>${total.length} personas · ${total.reduce((a, p) => a + p.bienes.length, 0)} bienes</span></header>
       <p class="rg-conteo">${textoConteo(conteo(total))}</p>
       ${bloques.map(([sec, ps, esVac]) => `<div class="rg-seccion">${bloques.length > 1 || esVac || sec.toUpperCase() !== area.toUpperCase() ? `<h3 class="rg-sec-t">${esc(sec)} <small>${ps.length}</small></h3>` : ""}
-        <div class="rg-grid">${ps.map(tarjeta).join("")}</div></div>`).join("")}</section>`;
+        <div class="rg-grid">${ps.map(tarjeta).join("")}${esVac ? `<button type="button" class="rg-agregar" data-agregar="${esc(area)}"><i class="bi bi-plus-lg"></i><span>Agregar vacante</span></button>` : ""}</div></div>`).join("")}</section>`;
   }).join("") : `<p class="rg-vacio">No hay personas que coincidan con la búsqueda.</p>`;
 }
 
@@ -167,6 +167,8 @@ setInterval(() => { if (sync.pend || sync.sesion === false && sync.sinRed) envia
 
 $("rgAreas").addEventListener("click", (e) => { const b = e.target.closest("[data-area]"); if (!b) return; estado.area = b.dataset.area; pintarAreas(); pintar(); });
 $("rgLista").addEventListener("click", (e) => {
+  const ag = e.target.closest("[data-agregar]"); if (ag) return agregarVacante(ag.dataset.agregar);
+  const bo = e.target.closest("[data-borrar]"); if (bo) { abrirPersona(Number(bo.dataset.borrar), null); dlg.borrar = true; pintarDlg(); return; }
   const b = e.target.closest(".rg-mas");
   if (b) { const id = Number(b.dataset.id); estado.abiertos.has(id) ? estado.abiertos.delete(id) : estado.abiertos.add(id); pintar(); return; }
   if (e.target.closest("a")) return;
@@ -177,7 +179,7 @@ $("rgLista").addEventListener("click", (e) => {
 ["rgBuscar", "rgFoto", "rgTipo", "rgEstado"].forEach(id => $(id).addEventListener("input", (e) => { if (e.target.tagName === "SELECT") e.target.classList.toggle("activo", !!e.target.value); pintar(); }));
 
 // ── Ventana de la persona: mover un No. de inventario a otra persona, cambiar la foto y registrar a alguien en una vacante
-const dlg = { id: 0, editar: false, mover: null, area: "", msg: "", ok: true, ocupado: false };
+const dlg = { id: 0, editar: false, borrar: false, mover: null, area: "", msg: "", ok: true, ocupado: false };
 const porId = (id) => PERSONAS.find(p => p.id === id);
 function indexar(p) { p.indice = norm([p.nombre, p.cargo, p.jefe, p.seccion, p.area, ...p.bienes.flatMap(b => [b.inv, b.desc, b.tipo, b.serie])].join(" ")); }
 function reducir(archivo) {
@@ -241,8 +243,10 @@ function pintarDlg() {
         <p class="rg-cargo">${esc(p.cargo || (p.vacante ? "Plaza vacante" : "Sin cargo registrado"))}</p>
         ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}
         <div class="rg-d-acc"><button type="button" class="tv-btn" id="rgEditar" aria-expanded="${dlg.editar}"><i class="bi bi-pencil"></i> ${dlg.editar ? "Cancelar edición" : "Editar datos"}</button><button type="button" class="tv-btn" id="rgCambiarFoto" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-camera"></i> ${p.foto ? "Cambiar foto" : "Agregar foto"}</button>
-          ${p.resguardo ? `<a class="tv-btn" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></div>
+          ${p.resguardo ? `<a class="tv-btn" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}
+          ${p.vacante ? `<button type="button" class="tv-btn rg-btn-borrar" id="rgBorrar" ${dlg.ocupado || p.bienes.length ? "disabled" : ""} title="${p.bienes.length ? "Mueve sus bienes antes de eliminarla" : "Eliminar esta vacante"}"><i class="bi bi-trash3"></i> Eliminar vacante</button>` : ""}</div></div>
     </div>
+    ${dlg.borrar && p.vacante && !p.bienes.length ? `<div class="rg-confirmar" role="alert"><p><i class="bi bi-exclamation-triangle"></i> ¿Eliminar <b>${esc(p.nombre)}</b> de ${esc(p.area)}?</p><div><button type="button" class="tv-btn" id="rgBorrarNo">Cancelar</button><button type="button" class="tv-btn rg-btn-borrar on" id="rgBorrarSi" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-trash3"></i> Sí, eliminar</button></div></div>` : ""}
     <p class="rg-d-msg${dlg.ok ? "" : " mal"}" role="status">${esc(dlg.msg)}</p>
     ${edicion}${registro}
     <h3 class="rg-d-tit">Bienes en resguardo <small>${p.bienes.length}</small></h3>
@@ -251,7 +255,7 @@ function pintarDlg() {
 
 function abrirPersona(id, inv) {
   const p = porId(id); if (!p) return;
-  Object.assign(dlg, { id, editar: false, mover: inv && p.bienes.some(b => b.inv === inv) ? inv : null, area: p.area, msg: "", ok: true, ocupado: false });
+  Object.assign(dlg, { id, editar: false, borrar: false, mover: inv && p.bienes.some(b => b.inv === inv) ? inv : null, area: p.area, msg: "", ok: true, ocupado: false });
   pintarDlg();
   const d = $("rgDlg");
   if (!d.open) { d.showModal(); document.documentElement.classList.add("con-ventana"); }
@@ -295,6 +299,26 @@ async function editar(form) {
   pintarDlg();
 }
 
+async function agregarVacante(area) {
+  const enArea = PERSONAS.filter(q => q.area === area); if (!enArea.length) return;
+  const num = Math.max(0, ...enArea.map(q => Number((/^vacante\s*(\d+)$/i.exec(q.nombre) || [])[1]) || 0)) + 1;
+  const ref = [...enArea].reverse().find(q => q.vacante) || enArea[0];
+  const id = 1000000 + Math.floor(Math.random() * 1999000000), nombre = `Vacante ${num}`;
+  const nueva = { id, orden: Math.max(...PERSONAS.map(q => q.orden)) + 1, area, area_orden: ref.area_orden, seccion: ref.seccion, nombre, vacante: true, cargo: null, jefe: null, foto: null, resguardo: null, por_actualizar: false, bienes: [] };
+  const ok = await cambiar({ tipo: "vacante", ruta: "/api/resguardos/vacante", cuerpo: { id, area, seccion: ref.seccion, nombre }, persona: id, texto: `Agregar ${nombre} en ${area}` }, () => { indexar(nueva); PERSONAS.push(nueva); pintarAreas(); pintar(); });
+  if (!ok) return alert("No se pudo guardar la vacante en este equipo. Intenta de nuevo.");
+  abrirPersona(id, null); aviso(`Se agregó ${nombre}. Puedes registrar a la persona aquí abajo.${sufijoRed()}`); pintarDlg();
+}
+
+async function eliminarVacante() {
+  const p = porId(dlg.id); if (!p || !p.vacante || p.bienes.length) return;
+  dlg.ocupado = true; pintarDlg();
+  const ok = await cambiar({ tipo: "eliminar", ruta: `/api/resguardos/${p.id}/eliminar`, cuerpo: {}, persona: p.id, texto: `Eliminar ${p.nombre} de ${p.area}` }, () => { PERSONAS.splice(PERSONAS.indexOf(p), 1); pintarAreas(); pintar(); });
+  dlg.ocupado = false;
+  if (ok) { dlg.borrar = false; $("rgDlg").close(); }
+  else { aviso("No se pudo guardar el cambio en este equipo. Intenta de nuevo.", false); pintarDlg(); }
+}
+
 async function marcarCorrecto(inv) {
   const b = porId(dlg.id).bienes.find(x => x.inv === inv); if (!b) return;
   const nuevo = !b.ok;
@@ -313,6 +337,9 @@ $("rgDlgCuerpo").addEventListener("click", (e) => {
   const m = e.target.closest("[data-mover]");
   if (m) { dlg.mover = dlg.mover === m.dataset.mover ? null : m.dataset.mover; dlg.area = porId(dlg.id).area; aviso(""); pintarDlg(); if (dlg.mover) $("rgMovPersona").focus(); return; }
   if (e.target.closest("#rgMovOk")) return mover();
+  if (e.target.closest("#rgBorrar")) { dlg.borrar = true; aviso(""); pintarDlg(); $("rgBorrarSi")?.focus(); return; }
+  if (e.target.closest("#rgBorrarNo")) { dlg.borrar = false; pintarDlg(); return; }
+  if (e.target.closest("#rgBorrarSi")) return eliminarVacante();
   if (e.target.closest("#rgEditar")) { dlg.editar = !dlg.editar; aviso(""); pintarDlg(); if (dlg.editar) $("rgEd").nombre.focus(); return; }
   if (e.target.closest("#rgCambiarFoto")) $("rgFotoArchivo").click();
 });
