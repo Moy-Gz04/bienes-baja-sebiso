@@ -81,7 +81,13 @@
 .rg-b-txt{ flex:1; min-width:0; }
 .rg-b-txt b{ display:block; font-size:13px; font-variant-numeric:tabular-nums; color:var(--txt); }
 .rg-b-txt small{ display:block; font-size:11px; color:var(--txt2); overflow-wrap:anywhere; }
-.rg-b-mover{ flex:none; padding:5px 11px; font-size:11.5px; }
+.rg-b-mover, .rg-b-ok{ flex:none; padding:5px 11px; font-size:11.5px; }
+.rg-b-ok.on{ background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
+.rg-d-bienes > li.ok{ border-color:#2E7D4F; background:#EAF6EE; }
+.rg-d-bienes > li.ok .rg-b-txt b{ color:#1E6B3F; }
+.rg-bienes li.ok, .rg-bienes li.ok:hover{ background:#D7F0DF; color:#1E6B3F; }
+.rg-bienes li.ok small{ color:#2E7D4F; }
+@media (max-width:520px){ .rg-b-fila{ flex-wrap:wrap; } .rg-b-txt{ flex-basis:100%; } }
 .rg-mover{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto; gap:8px; align-items:end; padding:10px; border-top:1px solid #F1EAE1; background:var(--suave); border-radius:0 0 11px 11px; }
 .rg-mover .tv-btn{ white-space:nowrap; }
 .rg-d-vacio{ padding:16px 0; }

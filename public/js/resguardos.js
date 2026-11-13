@@ -15,7 +15,7 @@ function tarjeta(p) {
   const abierta = estado.abiertos.has(p.id), n = p.bienes.length, lista = abierta ? p.bienes : p.bienes.slice(0, VISIBLES);
   const avatar = p.foto ? `<img src="${esc(p.foto)}" alt="Foto de ${esc(p.nombre)}" loading="lazy">` : `<span class="rg-ini${p.vacante ? " vac" : ""}">${p.vacante ? '<i class="bi bi-person-dash"></i>' : esc(iniciales(p.nombre))}</span>`;
   const detalle = (b) => [b.desc, b.carac].filter(Boolean).join(" — ");
-  const chips = lista.map(b => `<li data-inv="${esc(b.inv)}"${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}${b.desc ? `<small>${esc(b.desc)}</small>` : ""}</li>`).join("");
+  const chips = lista.map(b => `<li data-inv="${esc(b.inv)}"${b.ok ? ' class="ok"' : ""}${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}${b.desc ? `<small>${esc(b.desc)}</small>` : ""}</li>`).join("");
   const mas = n > VISIBLES ? `<button type="button" class="rg-mas" data-id="${p.id}">${abierta ? "Ver menos" : `Ver los ${n} bienes`}</button>` : "";
   return `<article class="rg-card${p.vacante ? " vacante" : ""}" data-persona="${p.id}">
     <div class="rg-foto">${avatar}</div>
@@ -115,7 +115,8 @@ function pintarDlg() {
   const bienes = p.bienes.map(b => {
     const sub = [b.desc, [b.marca, b.modelo].filter(v => v && v !== "-").join(" "), b.serie && b.serie !== "-" ? "Serie " + b.serie : ""].filter(Boolean).join(" · ");
     const abierto = dlg.mover === b.inv;
-    return `<li class="${abierto ? "abierto" : ""}"><div class="rg-b-fila"><div class="rg-b-txt"><b>${esc(b.inv)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</div>
+    return `<li class="${abierto ? "abierto" : ""}${b.ok ? " ok" : ""}"><div class="rg-b-fila"><div class="rg-b-txt"><b>${esc(b.inv)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</div>
+      <button type="button" class="tv-btn rg-b-ok${b.ok ? " on" : ""}" data-ok="${esc(b.inv)}" aria-pressed="${!!b.ok}" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-check-circle${b.ok ? "-fill" : ""}"></i> ${b.ok ? "Correcto" : "Marcar correcto"}</button>
       <button type="button" class="tv-btn rg-b-mover" data-mover="${esc(b.inv)}" aria-expanded="${abierto}"><i class="bi bi-arrow-left-right"></i> ${abierto ? "Cancelar" : "Mover"}</button></div>
       ${abierto ? `<div class="rg-mover">
         <label>Área<select id="rgMovArea">${areasOrden().map(a => `<option${a === dlg.area ? " selected" : ""}>${esc(a)}</option>`).join("")}</select></label>
@@ -173,7 +174,21 @@ async function registrar(form) {
   else { form.querySelector("button[type=submit]").disabled = false; avisoSolo(r.mensaje || "No se pudo registrar."); }
 }
 
+async function marcarCorrecto(inv) {
+  const b = porId(dlg.id).bienes.find(x => x.inv === inv); if (!b) return;
+  const nuevo = !b.ok;
+  dlg.ocupado = true; pintarDlg();
+  const r = await api("/api/resguardos/correcto", { inv, correcto: nuevo }).catch(() => ({ ok: false, mensaje: "No hay conexión. Intenta de nuevo." }));
+  dlg.ocupado = false;
+  if (r.ok) {
+    for (const q of PERSONAS) for (const x of q.bienes) if (x.inv === inv) x.ok = nuevo;
+    aviso(nuevo ? `El ${inv} quedó marcado como correcto.` : `Se quitó la marca de correcto al ${inv}.`); pintar();
+  } else aviso(r.mensaje || "No se pudo guardar la marca.", false);
+  pintarDlg();
+}
+
 $("rgDlgCuerpo").addEventListener("click", (e) => {
+  const k = e.target.closest("[data-ok]"); if (k) return marcarCorrecto(k.dataset.ok);
   const m = e.target.closest("[data-mover]");
   if (m) { dlg.mover = dlg.mover === m.dataset.mover ? null : m.dataset.mover; dlg.area = porId(dlg.id).area; aviso(""); pintarDlg(); if (dlg.mover) $("rgMovPersona").focus(); return; }
   if (e.target.closest("#rgMovOk")) return mover();

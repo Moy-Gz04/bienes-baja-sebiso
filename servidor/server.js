@@ -202,6 +202,8 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
 sql`CREATE TABLE IF NOT EXISTS resguardo_cambios (id SERIAL PRIMARY KEY, persona_id INT NOT NULL, tipo TEXT NOT NULL, detalle JSONB NOT NULL DEFAULT '{}', quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("resguardo_cambios:", e.message));
 sql`ALTER TABLE resguardo_personas ADD COLUMN IF NOT EXISTS foto_v INT NOT NULL DEFAULT 0`.catch(e => console.error("resguardo foto_v:", e.message));
+sql`CREATE TABLE IF NOT EXISTS resguardo_correctos (no_inventario TEXT PRIMARY KEY, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("resguardo_correctos:", e.message));
 const accesoResguardos = (req, res) => {
   if (req.soloCaptura || req.soloComprobar) { res.status(403).json({ ok: false, mensaje: "Tu usuario no tiene acceso a este apartado." }); return false; }
   return true;
@@ -214,9 +216,10 @@ app.get("/api/resguardos", sesion, async (req, res) => {
     const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto IS NOT NULL) AS tiene_foto, (d.persona_id IS NOT NULL) AS tiene_pdf,
       EXISTS (SELECT 1 FROM resguardo_cambios c WHERE c.persona_id = p.id AND c.tipo <> 'foto' AND c.cuando > COALESCE(d.cuando, 'epoch')) AS por_actualizar
       FROM resguardo_personas p LEFT JOIN resguardo_pdfs d ON d.persona_id = p.id ORDER BY p.orden`;
-    const bienes = await sql`SELECT persona_id, no_inventario, tipo, modelo, descripcion, serie, observaciones, marca, caracteristicas FROM resguardo_bienes ORDER BY persona_id, orden`;
+    const bienes = await sql`SELECT b.persona_id, b.no_inventario, b.tipo, b.modelo, b.descripcion, b.serie, b.observaciones, b.marca, b.caracteristicas, (c.no_inventario IS NOT NULL) AS correcto
+      FROM resguardo_bienes b LEFT JOIN resguardo_correctos c ON c.no_inventario = b.no_inventario ORDER BY b.persona_id, b.orden`;
     const por = new Map();
-    for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones, marca: b.marca, carac: b.caracteristicas }); }
+    for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, ok: b.correcto, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones, marca: b.marca, carac: b.caracteristicas }); }
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" }), tr = jwt.sign({ proposito: "resguardo" }, SECRETO, { expiresIn: "8h" });
     res.json({ ok: true, personas: personas.map(({ tiene_foto, tiene_pdf, foto_v, ...p }) => ({ ...p, resguardo: tiene_pdf ? `api/resguardos/${p.id}/pdf?t=${tr}` : null, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}&v=${foto_v}` : null, bienes: por.get(p.id) || [] })) });
   } catch (e) { fallo(res, e, "No se pudieron cargar los resguardos."); }
@@ -237,6 +240,20 @@ app.post("/api/resguardos/mover", sesion, async (req, res) => {
     await cambio(origen, "sale", det, quien); await cambio(destino, "entra", det, quien);
     res.json({ ok: true });
   } catch (e) { fallo(res, e, "No se pudo mover el bien."); }
+});
+
+// Marcar / desmarcar un No. de inventario como correcto
+app.post("/api/resguardos/correcto", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const inv = String(req.body?.inv ?? "").trim(), marcar = req.body?.correcto !== false;
+    if (!inv) return res.status(400).json({ ok: false, mensaje: "Falta el No. de inventario." });
+    const [b] = await sql`SELECT persona_id FROM resguardo_bienes WHERE no_inventario = ${inv} LIMIT 1`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: "Ese bien ya no existe. Recarga la página." });
+    if (marcar) await sql`INSERT INTO resguardo_correctos (no_inventario, quien) VALUES (${inv}, ${req.usuario.usuario}) ON CONFLICT (no_inventario) DO UPDATE SET quien = EXCLUDED.quien, cuando = now()`;
+    else await sql`DELETE FROM resguardo_correctos WHERE no_inventario = ${inv}`;
+    res.json({ ok: true, correcto: marcar });
+  } catch (e) { fallo(res, e, "No se pudo guardar la marca."); }
 });
 
 // Registrar a una persona en una vacante
