@@ -33,7 +33,8 @@ if(localStorage.getItem('rol') === 'mudanza'){ window.location.href = 'mudanza.h
   <div class="rg-barra">
     <label class="tv-buscar"><i class="bi bi-search"></i><input type="search" id="rgBuscar" placeholder="Buscar persona, cargo, jefe inmediato o No. de inventario…" aria-label="Buscar"></label>
     <select id="rgFoto" aria-label="Filtrar por foto"><option value="">Con y sin foto</option><option value="si">Con foto</option><option value="no">Sin foto</option></select>
-    <select id="rgTipo" aria-label="Filtrar por ocupación"><option value="">Personas y vacantes</option><option value="p">Solo personas</option><option value="v">Solo vacantes</option></select>
+    <select id="rgEstado" aria-label="Filtrar por confirmación"><option value="">Confirmados y por confirmar</option><option value="falta">Solo los que faltan por confirmar</option><option value="ok">Solo confirmados</option></select>
+    <select id="rgTipo"aria-label="Filtrar por ocupación"><option value="">Personas y vacantes</option><option value="p">Solo personas</option><option value="v">Solo vacantes</option></select>
   </div>
 
   <div id="rgLista" class="rg-lista"></div>

@@ -10,8 +10,8 @@ const textoConteo = (k) => `<b class="rg-c-ok"><i class="bi bi-check-circle-fill
 const VISIBLES = 8;   // bienes que se ven sin abrir la tarjeta
 
 function filtrados() {
-  const q = norm($("rgBuscar").value).split(/\s+/).filter(Boolean), foto = $("rgFoto").value, tipo = $("rgTipo").value;
-  return PERSONAS.filter(p => (!estado.area || p.area === estado.area) && (!foto || (foto === "si") === !!p.foto) && (!tipo || (tipo === "v") === p.vacante) && q.every(t => p.indice.includes(t)));
+  const q = norm($("rgBuscar").value).split(/\s+/).filter(Boolean), foto = $("rgFoto").value, tipo = $("rgTipo").value, conf = $("rgEstado").value;
+  return PERSONAS.filter(p => (!estado.area || p.area === estado.area) && (!conf || (conf === "ok" ? confirmada(p) : p.bienes.length > 0 && !confirmada(p))) && (!foto || (foto === "si") === !!p.foto) && (!tipo || (tipo === "v") === p.vacante) && q.every(t => p.indice.includes(t)));
 }
 
 function tarjeta(p) {
@@ -52,7 +52,8 @@ function pintarAreas() {
   const cuenta = (a) => PERSONAS.filter(p => !a || p.area === a);
   $("rgAreas").innerHTML = [["", "Todas las áreas"], ...areas.map(a => [a, a])].map(([a, t]) => {
     const c = cuenta(a);
-    return `<button type="button" role="tab" class="rg-area-btn" aria-selected="${estado.area === a}" data-area="${esc(a)}"><span>${esc(t)}</span><b>${c.length}</b><small>${c.reduce((s, p) => s + p.bienes.length, 0)} bienes</small></button>`;
+    const falta = c.filter(p => p.bienes.length && !confirmada(p)).length;
+    return `<button type="button" role="tab" class="rg-area-btn" aria-selected="${estado.area === a}" data-area="${esc(a)}">${falta ? `<i class="rg-punto" title="Faltan ${falta} por confirmar" aria-label="Faltan ${falta} por confirmar"></i>` : ""}<span>${esc(t)}</span><b>${c.length}</b><small>${c.reduce((s, p) => s + p.bienes.length, 0)} bienes</small></button>`;
   }).join("");
 }
 
@@ -173,7 +174,7 @@ $("rgLista").addEventListener("click", (e) => {
   const chip = e.target.closest("[data-inv]");
   abrirPersona(Number(card.dataset.persona), chip ? chip.dataset.inv : null);
 });
-["rgBuscar", "rgFoto", "rgTipo"].forEach(id => $(id).addEventListener("input", pintar));
+["rgBuscar", "rgFoto", "rgTipo", "rgEstado"].forEach(id => $(id).addEventListener("input", pintar));
 
 // ── Ventana de la persona: mover un No. de inventario a otra persona, cambiar la foto y registrar a alguien en una vacante
 const dlg = { id: 0, editar: false, mover: null, area: "", msg: "", ok: true, ocupado: false };
