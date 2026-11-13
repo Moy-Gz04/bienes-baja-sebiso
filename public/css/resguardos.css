@@ -111,3 +111,11 @@
 .rg-conteo small{ opacity:.8; }
 .rg-c-ok{ color:#1f7a4a; }
 .rg-c-falta{ color:#b4570a; }
+
+/* Que el contenido no se salga de la tarjeta */
+.rg-card{ min-width:0; overflow:hidden; }
+.rg-pie{ flex-wrap:wrap; justify-content:flex-start; }
+.rg-pie .tv-btn, .rg-pend{ white-space:nowrap; }
+.rg-pie .rg-admin{ margin-left:0; }
+.rg-bienes{ min-width:0; }
+.rg-bienes li{ max-width:100%; }
