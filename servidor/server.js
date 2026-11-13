@@ -269,6 +269,21 @@ app.post("/api/resguardos/correcto", sesion, async (req, res) => {
   } catch (e) { fallo(res, e, "No se pudo guardar la marca."); }
 });
 
+// Editar nombre, cargo y jefe de una persona o de una vacante (no cambia si es vacante)
+app.post("/api/resguardos/:id/editar", sesion, async (req, res) => {
+  if (!accesoResguardos(req, res)) return;
+  try {
+    const id = Number(req.params.id) || 0, t = (k, max) => String(req.body?.[k] ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+    const nombre = t("nombre", 120), cargo = t("cargo", 120), jefe = t("jefe", 120);
+    if (nombre.length < 3) return res.status(400).json({ ok: false, mensaje: "Escribe el nombre." });
+    const [antes] = await sql`SELECT nombre, cargo, jefe FROM resguardo_personas WHERE id = ${id}`;
+    if (!antes) return res.status(404).json({ ok: false, mensaje: "La persona ya no existe. Recarga la página." });
+    await sql`UPDATE resguardo_personas SET nombre = ${nombre}, cargo = ${cargo || null}, jefe = ${jefe || null} WHERE id = ${id}`;
+    await cambio(id, "edicion", { antes, nombre, cargo, jefe }, req.usuario.usuario);
+    res.json({ ok: true });
+  } catch (e) { fallo(res, e, "No se pudo guardar el cambio."); }
+});
+
 // Registrar a una persona en una vacante
 app.post("/api/resguardos/:id/persona", sesion, async (req, res) => {
   if (!accesoResguardos(req, res)) return;

@@ -4,6 +4,9 @@ const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 const iniciales = (n) => n.split(/\s+/).filter(w => /^\p{L}/u.test(w) && w.length > 2).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
+const confirmada = (p) => p.bienes.length > 0 && p.bienes.every(b => b.ok);
+const conteo = (ps) => { const c = ps.filter(p => p.bienes.length), ok = c.filter(confirmada).length; return { ok, falta: c.length - ok, bOk: c.reduce((a, p) => a + p.bienes.filter(b => b.ok).length, 0), bFalta: c.reduce((a, p) => a + p.bienes.filter(b => !b.ok).length, 0) }; };
+const textoConteo = (k) => `<b class="rg-c-ok"><i class="bi bi-check-circle-fill"></i> ${k.ok} confirmados</b> · <b class="rg-c-falta"><i class="bi bi-hourglass-split"></i> ${k.falta} por confirmar</b> <small>(bienes: ${k.bOk} correctos · ${k.bFalta} por confirmar)</small>`;
 const VISIBLES = 8;   // bienes que se ven sin abrir la tarjeta
 
 function filtrados() {
@@ -24,18 +27,22 @@ function tarjeta(p) {
       ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}</div>
     <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span></div>
     <ul class="rg-bienes">${chips}</ul>
-    <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Registrar / mover" : "Mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></article>`;
+    <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></article>`;
 }
 
 function pintar() {
   const lista = filtrados(), porArea = new Map();
   for (const p of lista) { if (!porArea.has(p.area)) porArea.set(p.area, new Map()); const s = porArea.get(p.area); if (!s.has(p.seccion)) s.set(p.seccion, []); s.get(p.seccion).push(p); }
   const bienes = lista.reduce((a, p) => a + p.bienes.length, 0);
-  $("rgResumen").innerHTML = `<div><b>${lista.length}</b>personas</div><div><b>${bienes.toLocaleString("es-MX")}</b>bienes</div><div><b>${porArea.size}</b>${porArea.size === 1 ? "área" : "áreas"}</div>`;
+  const kt = conteo(lista);
+  $("rgResumen").innerHTML = `<div><b>${lista.length}</b>personas</div><div><b>${bienes.toLocaleString("es-MX")}</b>bienes</div><div><b>${porArea.size}</b>${porArea.size === 1 ? "área" : "áreas"}</div><div class="rg-c-ok"><b>${kt.ok}</b>confirmados</div><div class="rg-c-falta"><b>${kt.falta}</b>por confirmar</div>`;
   $("rgLista").innerHTML = lista.length ? [...porArea].map(([area, secs]) => {
-    const total = [...secs.values()].flat();
+    const total = [...secs.values()].flat(), vac = total.filter(p => p.vacante);
+    const bloques = [...secs].map(([sec, ps]) => [sec, ps.filter(p => !p.vacante), false]).filter(([, ps]) => ps.length);
+    if (vac.length) bloques.push(["Vacantes", vac, true]);
     return `<section class="rg-area"><header><h2>${esc(area)}</h2><span>${total.length} personas · ${total.reduce((a, p) => a + p.bienes.length, 0)} bienes</span></header>
-      ${[...secs].map(([sec, ps]) => `<div class="rg-seccion">${secs.size > 1 || sec.toUpperCase() !== area.toUpperCase() ? `<h3 class="rg-sec-t">${esc(sec)} <small>${ps.length}</small></h3>` : ""}
+      <p class="rg-conteo">${textoConteo(conteo(total))}</p>
+      ${bloques.map(([sec, ps, esVac]) => `<div class="rg-seccion">${bloques.length > 1 || esVac || sec.toUpperCase() !== area.toUpperCase() ? `<h3 class="rg-sec-t">${esc(sec)} <small>${ps.length}</small></h3>` : ""}
         <div class="rg-grid">${ps.map(tarjeta).join("")}</div></div>`).join("")}</section>`;
   }).join("") : `<p class="rg-vacio">No hay personas que coincidan con la búsqueda.</p>`;
 }
@@ -169,7 +176,7 @@ $("rgLista").addEventListener("click", (e) => {
 ["rgBuscar", "rgFoto", "rgTipo"].forEach(id => $(id).addEventListener("input", pintar));
 
 // ── Ventana de la persona: mover un No. de inventario a otra persona, cambiar la foto y registrar a alguien en una vacante
-const dlg = { id: 0, mover: null, area: "", msg: "", ok: true, ocupado: false };
+const dlg = { id: 0, editar: false, mover: null, area: "", msg: "", ok: true, ocupado: false };
 const porId = (id) => PERSONAS.find(p => p.id === id);
 function indexar(p) { p.indice = norm([p.nombre, p.cargo, p.jefe, p.seccion, p.area, ...p.bienes.flatMap(b => [b.inv, b.desc, b.tipo, b.serie])].join(" ")); }
 function reducir(archivo) {
@@ -206,6 +213,15 @@ function pintarDlg() {
       </div>
       <div class="tv-dialogo-acc"><button type="submit" class="tv-btn tv-btn-principal" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-check-lg"></i> Registrar persona</button></div>
     </form>` : "";
+  const edicion = dlg.editar ? `<form class="rg-reg" id="rgEd" novalidate>
+      <h3><i class="bi bi-pencil"></i> Editar datos</h3>
+      <div class="rg-reg-campos">
+        <label>Nombre<input name="nombre" required maxlength="120" autocomplete="off" value="${esc(p.nombre)}"></label>
+        <label>Cargo<input name="cargo" maxlength="120" autocomplete="off" value="${esc(p.cargo || "")}"></label>
+        <label>Jefe inmediato<input name="jefe" maxlength="120" autocomplete="off" value="${esc(p.jefe || "")}"></label>
+      </div>
+      <div class="tv-dialogo-acc"><button type="submit" class="tv-btn tv-btn-principal" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-check-lg"></i> Guardar</button></div>
+    </form>` : "";
   const bienes = p.bienes.map(b => {
     const sub = [b.desc, [b.marca, b.modelo].filter(v => v && v !== "-").join(" "), b.serie && b.serie !== "-" ? "Serie " + b.serie : ""].filter(Boolean).join(" · ");
     const abierto = dlg.mover === b.inv;
@@ -223,18 +239,18 @@ function pintarDlg() {
         <h2 id="rgDlgNombre">${esc(p.nombre)}</h2>
         <p class="rg-cargo">${esc(p.cargo || (p.vacante ? "Plaza vacante" : "Sin cargo registrado"))}</p>
         ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}
-        <div class="rg-d-acc"><button type="button" class="tv-btn" id="rgCambiarFoto" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-camera"></i> ${p.foto ? "Cambiar foto" : "Agregar foto"}</button>
+        <div class="rg-d-acc"><button type="button" class="tv-btn" id="rgEditar" aria-expanded="${dlg.editar}"><i class="bi bi-pencil"></i> ${dlg.editar ? "Cancelar edición" : "Editar datos"}</button><button type="button" class="tv-btn" id="rgCambiarFoto" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-camera"></i> ${p.foto ? "Cambiar foto" : "Agregar foto"}</button>
           ${p.resguardo ? `<a class="tv-btn" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></div>
     </div>
     <p class="rg-d-msg${dlg.ok ? "" : " mal"}" role="status">${esc(dlg.msg)}</p>
-    ${registro}
+    ${edicion}${registro}
     <h3 class="rg-d-tit">Bienes en resguardo <small>${p.bienes.length}</small></h3>
     ${p.bienes.length ? `<ul class="rg-d-bienes">${bienes}</ul>` : `<p class="rg-vacio rg-d-vacio">No tiene bienes asignados.</p>`}`;
 }
 
 function abrirPersona(id, inv) {
   const p = porId(id); if (!p) return;
-  Object.assign(dlg, { id, mover: inv && p.bienes.some(b => b.inv === inv) ? inv : null, area: p.area, msg: "", ok: true, ocupado: false });
+  Object.assign(dlg, { id, editar: false, mover: inv && p.bienes.some(b => b.inv === inv) ? inv : null, area: p.area, msg: "", ok: true, ocupado: false });
   pintarDlg();
   const d = $("rgDlg");
   if (!d.open) { d.showModal(); document.documentElement.classList.add("con-ventana"); }
@@ -268,6 +284,16 @@ async function registrar(form) {
   else { form.querySelector("button[type=submit]").disabled = false; avisoSolo("No se pudo guardar el cambio en este equipo. Intenta de nuevo."); }
 }
 
+async function editar(form) {
+  const f = Object.fromEntries(new FormData(form)), t = (v) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 120), p = porId(dlg.id), datos = { nombre: t(f.nombre), cargo: t(f.cargo), jefe: t(f.jefe) };
+  if (datos.nombre.length < 3) { aviso("Escribe el nombre.", false); return pintarDlg(); }
+  dlg.ocupado = true; pintarDlg();
+  const ok = await cambiar({ tipo: "editar", ruta: `/api/resguardos/${p.id}/editar`, cuerpo: datos, persona: p.id, texto: `Editar los datos de ${p.nombre}` }, () => { Object.assign(p, { nombre: datos.nombre, cargo: datos.cargo || null, jefe: datos.jefe || null, por_actualizar: true }); indexar(p); dlg.editar = false; pintarAreas(); pintar(); });
+  dlg.ocupado = false;
+  aviso(ok ? `Datos guardados.${sufijoRed()}` : "No se pudo guardar el cambio en este equipo. Intenta de nuevo.", ok);
+  pintarDlg();
+}
+
 async function marcarCorrecto(inv) {
   const b = porId(dlg.id).bienes.find(x => x.inv === inv); if (!b) return;
   const nuevo = !b.ok;
@@ -286,10 +312,12 @@ $("rgDlgCuerpo").addEventListener("click", (e) => {
   const m = e.target.closest("[data-mover]");
   if (m) { dlg.mover = dlg.mover === m.dataset.mover ? null : m.dataset.mover; dlg.area = porId(dlg.id).area; aviso(""); pintarDlg(); if (dlg.mover) $("rgMovPersona").focus(); return; }
   if (e.target.closest("#rgMovOk")) return mover();
+  if (e.target.closest("#rgEditar")) { dlg.editar = !dlg.editar; aviso(""); pintarDlg(); if (dlg.editar) $("rgEd").nombre.focus(); return; }
   if (e.target.closest("#rgCambiarFoto")) $("rgFotoArchivo").click();
 });
 $("rgDlgCuerpo").addEventListener("change", (e) => { if (e.target.id === "rgMovArea") { dlg.area = e.target.value; $("rgMovPersona").innerHTML = opcionesPersonas(dlg.area, dlg.id); } });
-$("rgDlgCuerpo").addEventListener("submit", (e) => { if (e.target.id === "rgReg") { e.preventDefault(); registrar(e.target); } });
+$("rgDlgCuerpo").addEventListener("submit", (e) => { if (e.target.id === "rgEd") { e.preventDefault(); editar(e.target); return; }
+  if (e.target.id === "rgReg") { e.preventDefault(); registrar(e.target); } });
 $("rgFotoArchivo").addEventListener("change", async (e) => {
   const archivo = e.target.files[0]; e.target.value = ""; if (!archivo) return;
   dlg.ocupado = true; aviso("Guardando foto…"); pintarDlg();
