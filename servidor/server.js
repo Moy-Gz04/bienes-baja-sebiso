@@ -62,7 +62,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad"] }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos"] }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -90,6 +90,7 @@ function sesion(req, res, next) {
     req.soloComprobar = req.usuario.rol === "comprobar";   // solo ve Propuesta DIF y marca palomita / equis
     req.soloMudanza = req.usuario.rol === "mudanza";       // solo entra a Inventario · Mudanza y solo de su unidad presupuestal
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
+    if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
 }

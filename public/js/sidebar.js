@@ -12,7 +12,8 @@ const PAGINAS_TODAS = [
     { nombre:"Resguardos", ruta:"resguardos.html" },
     { nombre:"Inventario - Mudanza", ruta:"mudanza.html" },
 ];
-const PAGINAS = localStorage.getItem('rol') === 'mudanza' ? PAGINAS_TODAS.filter(p => p.ruta === 'mudanza.html') : PAGINAS_TODAS;
+const ROL_PAGINA = { mudanza: 'mudanza.html', resguardos: 'resguardos.html' }[localStorage.getItem('rol')];
+const PAGINAS = ROL_PAGINA ? PAGINAS_TODAS.filter(p => p.ruta === ROL_PAGINA) : PAGINAS_TODAS;
 
 
 /* =========================
