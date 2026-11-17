@@ -63,7 +63,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos"] }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos"], version: "drive-2026-11-17" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
