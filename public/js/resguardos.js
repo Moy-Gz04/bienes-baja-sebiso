@@ -166,7 +166,7 @@ window.addEventListener("offline", pintarSync);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) enviarCola(); });
 setInterval(() => { if (sync.pend || sync.sesion === false && sync.sinRed) enviarCola(); if (sync.copia && !sync.pend && !sync.enviando) cargar(); }, 15000);
 
-$("rgAreas").addEventListener("click", (e) => { const b = e.target.closest("[data-area]"); if (!b) return; estado.area = b.dataset.area; pintarAreas(); pintar(); });
+$("rgAreas").addEventListener("click", (e) => { const b = e.target.closest("[data-area]"); if (!b) return; estado.area = b.dataset.area; $("rgDesp").open = false; pintarAreas(); pintar(); });
 $("rgLista").addEventListener("click", (e) => {
   const ag = e.target.closest("[data-agregar]"); if (ag) return agregarVacante(ag.dataset.agregar);
   const bo = e.target.closest("[data-borrar]"); if (bo) { abrirPersona(Number(bo.dataset.borrar), null); dlg.borrar = true; pintarDlg(); return; }
