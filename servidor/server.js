@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 // API del Sistema de Bienes en propuesta de baja (Render). Datos en Neon; PDF de las fichas en Drive (Apps Script).
 // El front vive en Netlify y le pasa /api/* a este servidor (netlify.toml), así que todo es mismo origen.
 // Variables de entorno: DATABASE_URL, JWT_SECRET, APPS_SCRIPT_FICHAS_URL, APPS_SCRIPT_FICHAS_CLAVE, PORT
@@ -32,10 +33,10 @@ const jsonChico = express.json({ limit: "100kb" }), jsonFotos = express.json({ l
 app.use((req, res, next) => (/^\/api\/(bienes\/[^/]+\/fotos|mudanza|resguardos\/\d+\/foto)$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
-// Fotos tomadas en el sistema para los bienes que no tenían (3 por bien), guardadas en Neon
+// Fotos tomadas en el sistema para los bienes que no tenían (3 por bien): el archivo vive en Drive, aquí solo su id
 sql`CREATE TABLE IF NOT EXISTS fotos_capturadas (
   no_inventario TEXT NOT NULL REFERENCES bienes ON DELETE CASCADE, orden INT NOT NULL CHECK (orden BETWEEN 1 AND 3),
-  imagen BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (no_inventario, orden))`
+  drive_id TEXT NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (no_inventario, orden))`
   .catch(e => console.error("No se pudo preparar fotos_capturadas:", e.message));
 
 // Comprobación física de cada bien: palomita (sí) o equis (no)
@@ -189,8 +190,9 @@ app.post("/api/bienes/:inv/fotos", sesion, async (req, res) => {
       return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida. Vuelve a tomarla." });
     }
     const quien = req.usuario.usuario || "—";
-    await sql.transaction(bytes.map((x, i) => sql`INSERT INTO fotos_capturadas (no_inventario, orden, imagen, quien) VALUES (${inv}, ${i + 1}, ${x}, ${quien})
-      ON CONFLICT (no_inventario, orden) DO UPDATE SET imagen = EXCLUDED.imagen, quien = EXCLUDED.quien, cuando = now()`));
+    const ids = await subirFotosDrive(bytes);
+    await sql.transaction(ids.map((x, i) => sql`INSERT INTO fotos_capturadas (no_inventario, orden, drive_id, quien) VALUES (${inv}, ${i + 1}, ${x}, ${quien})
+      ON CONFLICT (no_inventario, orden) DO UPDATE SET drive_id = EXCLUDED.drive_id, quien = EXCLUDED.quien, cuando = now()`));
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
     programarFicha(inv);
     res.json({ ok: true, ficha_generando: generacion.get(inv), fotos: [1, 2, 3].map(i => `api/foto/${inv}/${i}?t=${tf}&v=${Date.now()}`), fotos_capturadas: { quien, cuando: new Date().toISOString().slice(0, 10) } });
@@ -226,7 +228,7 @@ const cambio = (persona, tipo, detalle, quien) => sql`INSERT INTO resguardo_camb
 app.get("/api/resguardos", sesion, async (req, res) => {
   if (!accesoResguardos(req, res)) return;
   try {
-    const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto IS NOT NULL) AS tiene_foto, (d.persona_id IS NOT NULL) AS tiene_pdf,
+    const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto_drive_id IS NOT NULL) AS tiene_foto, (d.pdf_drive_id IS NOT NULL) AS tiene_pdf,
       EXISTS (SELECT 1 FROM resguardo_cambios c WHERE c.persona_id = p.id AND c.tipo NOT IN ('foto', 'alta_vacante') AND c.cuando > COALESCE(d.cuando, 'epoch')) AS por_actualizar
       FROM resguardo_personas p LEFT JOIN resguardo_pdfs d ON d.persona_id = p.id ORDER BY p.orden`;
     const bienes = await sql`SELECT b.persona_id, b.no_inventario, b.tipo, b.modelo, b.descripcion, b.serie, b.observaciones, b.marca, b.caracteristicas, (c.no_inventario IS NOT NULL) AS correcto
@@ -338,7 +340,8 @@ app.post("/api/resguardos/:id/foto", sesion, async (req, res) => {
     const id = Number(req.params.id) || 0;
     const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.foto ?? "")), b = m ? Buffer.from(m[1], "base64") : null;
     if (!b || b.length < 2000 || b.length > 4 * 1024 * 1024 || b[0] !== 0xff || b[1] !== 0xd8) return res.status(400).json({ ok: false, mensaje: "La foto no es válida. Elige otra." });
-    const [r] = await sql`UPDATE resguardo_personas SET foto = ${b}, foto_v = foto_v + 1 WHERE id = ${id} RETURNING foto_v`;
+    const [fid] = await subirFotosDrive([b]);
+    const [r] = await sql`UPDATE resguardo_personas SET foto_drive_id = ${fid}, foto_v = foto_v + 1 WHERE id = ${id} RETURNING foto_v`;
     if (!r) return res.status(404).json({ ok: false, mensaje: "La persona ya no existe." });
     await cambio(id, "foto", {}, req.usuario.usuario);
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
@@ -349,25 +352,25 @@ app.post("/api/resguardos/:id/foto", sesion, async (req, res) => {
 app.get("/api/resguardos/:id/pdf", async (req, res) => {
   try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "resguardo") throw 0; } catch (e) { return res.status(401).send("El enlace venció. Vuelve a abrirlo desde el sistema."); }
   try {
-    const [f] = await sql`SELECT nombre, pdf FROM resguardo_pdfs WHERE persona_id = ${Number(req.params.id) || 0}`;
-    if (!f) return res.status(404).send("Esta persona todavía no tiene resguardo.");
-    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(f.nombre)}`, "Cache-Control": "private, max-age=300" }).send(Buffer.from(f.pdf));
+    const [f] = await sql`SELECT nombre, pdf_drive_id FROM resguardo_pdfs WHERE persona_id = ${Number(req.params.id) || 0}`;
+    if (!f || !f.pdf_drive_id) return res.status(404).send("Esta persona todavía no tiene resguardo.");
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(f.nombre)}`, "Cache-Control": "private, max-age=300" }).send(await bajarDrive(f.pdf_drive_id));
   } catch (e) { fallo(res, e, "No se pudo cargar el resguardo."); }
 });
 
 app.get("/api/resguardos/:id/foto", async (req, res) => {
   try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
   try {
-    const [f] = await sql`SELECT foto FROM resguardo_personas WHERE id = ${Number(req.params.id) || 0}`;
-    if (!f || !f.foto) return res.status(404).end();
-    res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.foto));
+    const [f] = await sql`SELECT foto_drive_id FROM resguardo_personas WHERE id = ${Number(req.params.id) || 0}`;
+    if (!f || !f.foto_drive_id) return res.status(404).end();
+    res.set("Cache-Control", "private, max-age=86400").redirect(302, urlDrive(f.foto_drive_id));
   } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
 });
 
 // ── Inventario · Mudanza: captura libre de bienes (inventario, descripción, serie, quién lo resguarda y su cargo, 3 fotos)
 sql`CREATE TABLE IF NOT EXISTS mudanza_inventario (
   id SERIAL PRIMARY KEY, no_inventario TEXT NOT NULL, descripcion TEXT NOT NULL, serie TEXT NOT NULL DEFAULT '', persona TEXT NOT NULL, cargo TEXT NOT NULL DEFAULT '',
-  foto_frente BYTEA NOT NULL, foto_lado BYTEA NOT NULL, foto_etiqueta BYTEA NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  foto_frente TEXT NOT NULL, foto_lado TEXT NOT NULL, foto_etiqueta TEXT NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar mudanza_inventario:", e.message));
 sql`ALTER TABLE mudanza_inventario ADD COLUMN IF NOT EXISTS unidad TEXT`.catch(e => console.error("mudanza unidad:", e.message));
 sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS unidad TEXT`.catch(e => console.error("usuarios unidad:", e.message));
@@ -407,8 +410,9 @@ app.post("/api/mudanza", sesion, async (req, res) => {
       if (!b || b.length < 2000 || b.length > 4 * 1024 * 1024 || b[0] !== 0xff || b[1] !== 0xd8) return res.status(400).json({ ok: false, mensaje: `La foto de ${k === "lado" ? "lado" : k} falta o no es válida. Vuelve a tomarla.` });
       bytes[k] = b;
     }
+    const [idF, idL, idE] = await subirFotosDrive([bytes.frente, bytes.lado, bytes.etiqueta]);
     const [r] = await sql`INSERT INTO mudanza_inventario (no_inventario, descripcion, serie, persona, cargo, foto_frente, foto_lado, foto_etiqueta, quien, unidad)
-      VALUES (${inv}, ${descripcion}, ${serie}, ${persona}, ${cargo}, ${bytes.frente}, ${bytes.lado}, ${bytes.etiqueta}, ${req.usuario.usuario || "—"}, ${unidad}) RETURNING id`;
+      VALUES (${inv}, ${descripcion}, ${serie}, ${persona}, ${cargo}, ${idF}, ${idL}, ${idE}, ${req.usuario.usuario || "—"}, ${unidad}) RETURNING id`;
     res.json({ ok: true, id: r.id });
   } catch (e) { fallo(res, e, "No se pudo guardar el registro."); }
 });
@@ -429,7 +433,7 @@ app.get("/api/mudanza/:id/foto/:tipo", async (req, res) => {
       : col === "foto_lado" ? await sql`SELECT foto_lado AS img FROM mudanza_inventario WHERE id = ${id} AND (${u}::text IS NULL OR unidad = ${u})`
       : await sql`SELECT foto_etiqueta AS img FROM mudanza_inventario WHERE id = ${id} AND (${u}::text IS NULL OR unidad = ${u})`;
     if (!f) return res.status(404).end();
-    res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.img));
+    res.set("Cache-Control", "private, max-age=86400").redirect(302, urlDrive(f.img));
   } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
 });
 
@@ -503,6 +507,17 @@ async function appsScript(cuerpo) {
   }
   throw ultimo;
 }
+// Archivos en Drive (la base solo guarda el id). Fotos: acción guardarFotos; otros: guardarArchivos.
+const urlDrive = id => "https://lh3.googleusercontent.com/d/" + id + "=w1400";
+async function subirFotosDrive(bufs) {
+  const d = await appsScript({ accion: "guardarFotos", fotos: bufs.map(b => ({ nombre: crypto.randomBytes(12).toString("hex") + ".jpg", jpg_base64: b.toString("base64") })) });
+  return d.resultados.map(r => { if (!r.ok || !r.id) throw new Error(r.error || "Drive no devolvió el id"); return r.id; });
+}
+async function bajarDrive(id) {
+  const r = await fetch("https://drive.google.com/uc?export=download&id=" + encodeURIComponent(id), { redirect: "follow", signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error("Drive " + r.status);
+  return Buffer.from(await r.arrayBuffer());
+}
 async function bajarImagen(url) {
   const r = await fetch(url, { headers: { Accept: "image/jpeg,image/png" }, signal: AbortSignal.timeout(30000) });
   if (!r.ok) throw new Error(`Foto ${r.status}: ${url}`);
@@ -517,7 +532,7 @@ async function generarFicha(inv) {
     LEFT JOIN fotos_drive d ON d.nombre = substring(f.ruta from '[^/]+$') WHERE f.no_inventario = ${inv} ORDER BY f.orden LIMIT 3`;
   const fotos = origen.length
     ? await Promise.all(origen.map(o => bajarImagen(o.url).catch(e => { console.error(e.message); return null; })))
-    : (await sql`SELECT imagen FROM fotos_capturadas WHERE no_inventario = ${inv} ORDER BY orden`).map(f => Buffer.from(f.imagen));
+    : await Promise.all((await sql`SELECT drive_id FROM fotos_capturadas WHERE no_inventario = ${inv} ORDER BY orden`).map(f => bajarImagen(urlDrive(f.drive_id)).catch(e => { console.error(e.message); return null; })));
   const pdf = await fichaPdf(bien, fotos);
   const d = await appsScript({ accion: "guardarVarios", fichas: [{ no_inventario: inv, pdf_base64: pdf.toString("base64"), origen: "sistema" }] });
   const r = (d.resultados || [])[0];
@@ -534,9 +549,9 @@ app.get("/api/ficha/:inv/estado", sesion, (req, res) => res.json({ ok: true, fic
 app.get("/api/foto/:inv/:orden", async (req, res) => {
   try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "fotos") throw 0; } catch (e) { return res.status(401).end(); }
   try {
-    const [f] = await sql`SELECT imagen FROM fotos_capturadas WHERE no_inventario = ${String(req.params.inv)} AND orden = ${Number(req.params.orden) || 0}`;
+    const [f] = await sql`SELECT drive_id FROM fotos_capturadas WHERE no_inventario = ${String(req.params.inv)} AND orden = ${Number(req.params.orden) || 0}`;
     if (!f) return res.status(404).end();
-    res.set({ "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" }).send(Buffer.from(f.imagen));
+    res.set("Cache-Control", "private, max-age=86400").redirect(302, urlDrive(f.drive_id));
   } catch (e) { fallo(res, e, "No se pudo cargar la foto."); }
 });
 

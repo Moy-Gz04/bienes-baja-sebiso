@@ -70,6 +70,7 @@ function doPost(e) {
     if (d.accion === 'guardarFotos') return responder_(guardarFotos_(d));
     if (d.accion === 'guardarCarpeta') return responder_(guardarCarpeta_(d));
     if (d.accion === 'renombrarFichas') return responder_(renombrarFichas_());
+    if (d.accion === 'guardarArchivos') return responder_(guardarArchivos_(d));
     if (d.accion === 'listar') return responder_(listar_());
     return responder_({ ok: false, error: 'Acción no reconocida: ' + d.accion });
   } catch (err) {
@@ -221,4 +222,25 @@ function guardarCarpeta_(d) {
     carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(a.base64), a.mime || 'application/octet-stream', a.nombre));
   });
   return { ok: true, carpeta_id: carpeta.getId(), version: 'carpetas-2026-11-05' };
+}
+
+/** { carpeta: 'Resguardos PDF', archivos: [{ nombre, mime, base64 }] } -> sube cada archivo a esa subcarpeta
+ *  (visible con el enlace) y devuelve su id. Sirve para PDF y fotos que ya no se guardan en la base. */
+function guardarArchivos_(d) {
+  var nom = String(d.carpeta || 'Archivos').replace(/[^\w áéíóúñÁÉÍÓÚÑ.-]/g, '').slice(0, 60) || 'Archivos';
+  var p = props_(), key = 'CARPETA_' + nom, id = p.getProperty(key), carpeta = null;
+  if (id) { try { carpeta = DriveApp.getFolderById(id); } catch (x) { carpeta = null; } }
+  if (!carpeta) {
+    var raiz = DriveApp.getFolderById(CARPETA_ID), it = raiz.getFoldersByName(nom);
+    carpeta = it.hasNext() ? it.next() : raiz.createFolder(nom);
+    p.setProperty(key, carpeta.getId());
+  }
+  return { ok: true, version: 'archivos-2026-11-17', resultados: (d.archivos || []).map(function (a) {
+    try {
+      if (!a.nombre || !a.base64) throw new Error('Datos incompletos');
+      var archivo = carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(a.base64), a.mime || 'application/octet-stream', String(a.nombre).slice(0, 150)));
+      archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      return { nombre: a.nombre, ok: true, id: archivo.getId() };
+    } catch (err) { return { nombre: a.nombre, ok: false, error: String(err) }; }
+  }) };
 }
