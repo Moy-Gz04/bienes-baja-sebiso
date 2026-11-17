@@ -9,7 +9,7 @@ const DIR = path.join(__dirname, "_resguardos");
 const personas = JSON.parse(fs.readFileSync(path.join(DIR, "personas.json"), "utf8"));
 
 const SECCIONES = {
-  "COORDINACION ADM": "Coordinación Administrativa", "SUB INT Y CONT DE INF": "Subdirección de Integración y Control de la Información", "INFORMATICA": "Informática",
+  "COORDINACION ADM": "Coordinación Administrativa", "SUB INT Y CONT DE INF": "Subdirección de Integración y Control de Información", "INFORMATICA": "Informática",
   "HUMANOS": "Recursos Humanos", "AUDITORIAS": "Auditorías", "MATERIALES": "Recursos Materiales", "FINANCIEROS": "Recursos Financieros",
   "DESPACHO": "Despacho", "SUB INCLUSION Y DESA": "Subsecretaría de Inclusión y Desarrollo", "SUB DES SOC Y HUM": "Subsecretaría de Desarrollo Social y Humano",
   "SUBSE PART SOC Y FOM ART": "Subsecretaría de Participación Social y Fomento Artesanal", "DIRECCION GEN FOM ART": "Dirección General de Fomento Artesanal",
