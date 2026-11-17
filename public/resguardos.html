@@ -28,7 +28,10 @@ if(localStorage.getItem('rol') === 'mudanza'){ window.location.href = 'mudanza.h
     <div class="b-cabeza-der"><div class="b-resumen" id="rgResumen" aria-live="polite"></div></div>
   </header>
 
-  <div class="rg-areas" id="rgAreas" role="tablist" aria-label="Áreas"></div>
+  <details class="rg-desp" id="rgDesp">
+    <summary><i class="bi bi-diagram-3"></i><span>Área: <b id="rgAreaSel">Todas las áreas</b></span><small id="rgAreaCta"></small><i class="bi bi-chevron-down rg-flecha"></i></summary>
+    <div class="rg-areas" id="rgAreas" role="tablist" aria-label="Áreas"></div>
+  </details>
 
   <div class="rg-barra">
     <label class="tv-buscar"><i class="bi bi-search"></i><input type="search" id="rgBuscar" placeholder="Buscar persona, cargo, jefe inmediato o No. de inventario…" aria-label="Buscar"></label>
