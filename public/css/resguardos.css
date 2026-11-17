@@ -156,3 +156,39 @@
 .rg-confirmar p{ margin:0; font-size:13px; color:#7A1F1F; }
 .rg-confirmar div{ display:flex; gap:8px; }
 .rg-confirmar .tv-btn{ padding:6px 12px; font-size:12px; }
+
+/* Áreas en desplegable */
+.rg-desp{ margin-bottom:10px; border:1.5px solid var(--borde); border-radius:14px; background:#fff; }
+.rg-desp > summary{ display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; list-style:none; font-size:13px; color:var(--txt2); }
+.rg-desp > summary::-webkit-details-marker{ display:none; }
+.rg-desp > summary > i:first-child{ color:var(--g); font-size:16px; }
+.rg-desp > summary b{ color:var(--g); font-weight:800; }
+.rg-desp > summary small{ margin-left:auto; font-size:12px; font-variant-numeric:tabular-nums; }
+.rg-flecha{ color:var(--g); transition:transform .2s; }
+.rg-desp[open] .rg-flecha{ transform:rotate(180deg); }
+.rg-desp[open] > summary{ border-bottom:1px solid #F1EAE1; }
+.rg-desp .rg-areas{ margin:0; padding:10px; }
+.rg-desp > summary:focus-visible{ outline:2px solid var(--g); outline-offset:2px; border-radius:12px; }
+
+/* Barra fija arriba */
+.rg-barra{ position:sticky; top:0; z-index:20; }
+
+/* Tarjetas de persona en guinda */
+.rg-card{ background:var(--g); border-color:var(--g); color:#fff; }
+.rg-card:hover{ border-color:#7A2E44; box-shadow:0 6px 18px rgba(95,33,50,.28); }
+.rg-card .rg-datos h3, .rg-card .rg-total b{ color:#fff; }
+.rg-card .rg-cargo, .rg-card .rg-total span{ color:rgba(255,255,255,.82); }
+.rg-card .rg-jefe{ color:rgba(255,255,255,.65); }
+.rg-card .rg-foto img, .rg-card .rg-ini{ border-color:var(--g); box-shadow:0 0 0 1.5px rgba(255,255,255,.55); background:#fff; }
+.rg-card .rg-bienes{ border-top-color:rgba(255,255,255,.18); }
+.rg-card .rg-bienes li{ background:rgba(255,255,255,.14); color:#fff; }
+.rg-card .rg-bienes li small{ color:rgba(255,255,255,.7); }
+.rg-card .rg-bienes li[data-inv]:hover{ background:rgba(255,255,255,.26); }
+.rg-card .rg-bienes li.ok, .rg-card .rg-bienes li.ok:hover{ background:#D7F0DF; color:#1E6B3F; }
+.rg-card .rg-bienes li.ok small{ color:#2E7D4F; }
+.rg-card .tv-btn, .rg-card .rg-mas{ background:#fff; border-color:#fff; color:var(--g); }
+.rg-card .tv-btn:hover, .rg-card .rg-mas:hover{ background:var(--suave); border-color:var(--suave); }
+.rg-card .rg-borrar{ color:#A32D2D; }
+.rg-card .rg-pend{ background:#FFE7A8; color:#6B4500; }
+.rg-card.vacante{ background:#8A4A5C; border-color:rgba(255,255,255,.4); border-style:dashed; }
+.rg-card.vacante .rg-ini.vac{ color:#8A4A5C; }
