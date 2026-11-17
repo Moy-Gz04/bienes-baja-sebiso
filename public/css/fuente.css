@@ -1,0 +1,7 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap");
+/* Tipografía única del sistema */
+html, body, button, input, select, textarea, optgroup, option, dialog, h1, h2, h3, h4, h5, h6, p, span, a, label, small, b, td, th, li{ font-family:'Montserrat', system-ui, sans-serif; }
+.bi, [class^="bi-"], [class*=" bi-"], .ti, [class^="ti-"], [class*=" ti-"]{ font-family:inherit; }
+.bi::before, [class^="bi-"]::before, [class*=" bi-"]::before{ font-family:"bootstrap-icons" !important; }
+.ti::before, [class^="ti-"]::before, [class*=" ti-"]::before{ font-family:"tabler-icons" !important; }
+.tv-mono{ font-family:ui-monospace, Consolas, monospace; }
