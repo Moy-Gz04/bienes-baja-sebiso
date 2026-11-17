@@ -56,6 +56,9 @@ function pintarAreas() {
     const falta = c.filter(p => p.bienes.length && !confirmada(p)).length;
     return `<button type="button" role="tab" class="rg-area-btn" aria-selected="${estado.area === a}" data-area="${esc(a)}">${falta ? `<i class="rg-punto" title="Faltan ${falta} por confirmar" aria-label="Faltan ${falta} por confirmar"></i>` : ""}<span>${esc(t)}</span><b>${c.length}</b><small>${c.reduce((s, p) => s + p.bienes.length, 0)} bienes</small></button>`;
   }).join("");
+  const sel = cuenta(estado.area);
+  $("rgAreaSel").textContent = estado.area || "Todas las áreas";
+  $("rgAreaCta").textContent = `${sel.length} personas · ${sel.reduce((s, p) => s + p.bienes.length, 0)} bienes`;
 }
 
 // ── Trabajo sin internet ─────────────────────────────────────────────────────────────────────────
