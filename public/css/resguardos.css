@@ -208,3 +208,29 @@
   box-shadow:0 8px 28px rgba(95,33,50,.14), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(188,149,92,.18); }
 .rg-barra .tv-buscar, .rg-barra select{ background-color:rgba(255,255,255,.7); border-color:rgba(95,33,50,.14); box-shadow:inset 0 1px 2px rgba(95,33,50,.06); }
 .rg-barra .tv-buscar:focus-within{ background:rgba(255,255,255,.92); border-color:var(--g); box-shadow:0 0 0 3px rgba(95,33,50,.12); }
+
+/* ===== Paleta institucional Gobierno de México: guinda #691C32 / #9F2241, dorado #BC955C / #DDC9A3 ===== */
+.rg-barra{ top:var(--rg-tope, 150px); z-index:900; }
+.rg-card{ background:linear-gradient(135deg,#691C32 0%,#7E2139 35%,#9F2241 62%,#B07A4E 86%,#BC955C 100%); border:1px solid rgba(221,201,163,.35); box-shadow:0 8px 22px rgba(105,28,50,.22), inset 0 1px 0 rgba(255,255,255,.16); }
+.rg-card:hover{ border-color:rgba(221,201,163,.75); box-shadow:0 12px 30px rgba(105,28,50,.32), inset 0 1px 0 rgba(255,255,255,.22); }
+.rg-card .rg-total b{ color:#fff; }
+.rg-card .rg-foto img, .rg-card .rg-ini{ box-shadow:0 0 0 2px #DDC9A3; border-color:#691C32; color:#691C32; }
+.rg-card .tv-btn, .rg-card .rg-mas{ background:#fff; border-color:#fff; color:#691C32; }
+.rg-card .tv-btn:hover, .rg-card .rg-mas:hover{ background:#DDC9A3; border-color:#DDC9A3; color:#691C32; }
+.rg-card.vacante{ background:linear-gradient(135deg,#8C4A5C 0%,#A0707A 55%,#C4A57A 100%); border:1.5px dashed rgba(255,255,255,.55); }
+.rg-area > header{ background:linear-gradient(90deg,#691C32,#9F2241); }
+
+/* ===== Buscador liquid glass ===== */
+.rg-barra{ isolation:isolate; overflow:hidden; border-radius:20px; padding:12px;
+  background:linear-gradient(135deg,rgba(255,255,255,.28) 0%,rgba(255,255,255,.10) 45%,rgba(221,201,163,.18) 100%);
+  border:1px solid rgba(255,255,255,.55);
+  backdrop-filter:blur(22px) saturate(190%) brightness(1.08); -webkit-backdrop-filter:blur(22px) saturate(190%) brightness(1.08);
+  box-shadow:0 12px 34px rgba(105,28,50,.20), 0 2px 6px rgba(105,28,50,.08), inset 0 1.5px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(188,149,92,.35), inset 1px 0 0 rgba(255,255,255,.4), inset -1px 0 0 rgba(255,255,255,.25); }
+.rg-barra::before{ content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; border-radius:inherit;
+  background:radial-gradient(120% 90% at 12% -20%,rgba(255,255,255,.75),transparent 55%), radial-gradient(80% 120% at 100% 120%,rgba(188,149,92,.28),transparent 60%); }
+.rg-barra::after{ content:""; position:absolute; left:6%; right:6%; top:1px; height:40%; z-index:-1; pointer-events:none; border-radius:18px 18px 50% 50%/18px 18px 100% 100%; background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0)); }
+.rg-barra .tv-buscar, .rg-barra select{ background-color:rgba(255,255,255,.55); border:1px solid rgba(255,255,255,.75); border-radius:14px;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 1px 3px rgba(105,28,50,.08); color:#691C32; }
+.rg-barra .tv-buscar i{ color:#9F2241; }
+.rg-barra .tv-buscar:focus-within, .rg-barra select:focus{ background-color:rgba(255,255,255,.85); border-color:#BC955C; box-shadow:0 0 0 3px rgba(188,149,92,.3), inset 0 1px 0 #fff; }
+.rg-barra select.activo{ background-color:rgba(159,34,65,.12); color:#691C32; border-color:#9F2241; }

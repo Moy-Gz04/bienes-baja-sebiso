@@ -364,3 +364,8 @@ const dlgEl = $("rgDlg");
 dlgEl.addEventListener("click", (e) => { if (e.target === dlgEl || e.target.closest("[data-cerrar]")) dlgEl.close(); });
 dlgEl.addEventListener("close", () => document.documentElement.classList.remove("con-ventana"));
 cargar();
+
+// La barra de búsqueda se pega justo debajo del encabezado fijo del sistema
+(() => { const ajustar = () => { const h = document.querySelector(".hs-encabezado"); document.documentElement.style.setProperty("--rg-tope", (h ? h.getBoundingClientRect().height : 0) + "px"); };
+  ajustar(); addEventListener("resize", ajustar); new MutationObserver(ajustar).observe(document.body, { childList: true });
+  const h = () => document.querySelector(".hs-encabezado"); const ro = new ResizeObserver(ajustar); const t = setInterval(() => { if (h()) { ro.observe(h()); ajustar(); clearInterval(t); } }, 200); })();
