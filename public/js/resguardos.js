@@ -297,7 +297,7 @@ async function editar(form) {
   const f = Object.fromEntries(new FormData(form)), t = (v) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 120), p = porId(dlg.id), datos = { nombre: t(f.nombre), cargo: t(f.cargo), jefe: t(f.jefe) };
   if (datos.nombre.length < 3) { aviso("Escribe el nombre.", false); return pintarDlg(); }
   dlg.ocupado = true; pintarDlg();
-  const ok = await cambiar({ tipo: "editar", ruta: `/api/resguardos/${p.id}/editar`, cuerpo: datos, persona: p.id, texto: `Editar los datos de ${p.nombre}` }, () => { Object.assign(p, { nombre: datos.nombre, cargo: datos.cargo || null, jefe: datos.jefe || null, por_actualizar: true }); indexar(p); dlg.editar = false; pintarAreas(); pintar(); });
+  const ok = await cambiar({ tipo: "editar", ruta: `/api/resguardos/${p.id}/editar`, cuerpo: datos, persona: p.id, texto: `Editar los datos de ${p.nombre}` }, () => { Object.assign(p, { nombre: datos.nombre, cargo: datos.cargo || null, jefe: datos.jefe || null, vacante: /^vacante(s+d+)?$/i.test(datos.nombre), por_actualizar: true }); indexar(p); dlg.editar = false; pintarAreas(); pintar(); });
   dlg.ocupado = false;
   aviso(ok ? `Datos guardados.${sufijoRed()}` : "No se pudo guardar el cambio en este equipo. Intenta de nuevo.", ok);
   pintarDlg();
