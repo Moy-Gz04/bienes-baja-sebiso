@@ -102,7 +102,7 @@ function sesion(req, res, next) {
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
     // rol "existencia": solo consulta bienes, ve su ficha y confirma su existencia (trabaja sin internet: sesión de 30 días)
     req.soloExistencia = req.usuario.rol === "existencia";
-    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
+    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     // rol "monitor": solo ve en tiempo real las existencias confirmadas
     if (req.usuario.rol === "monitor" && req.path !== "/api/monitor-existencias") return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta el monitor de existencias." });
@@ -221,7 +221,7 @@ app.post("/api/existencia", sesion, async (req, res) => {
 
 // ── Monitor en tiempo real de las existencias confirmadas (rol monitor o completo); la ventana consulta cada pocos segundos.
 app.get("/api/monitor-existencias", sesion, async (req, res) => {
-  if (req.usuario.rol !== "monitor" && req.usuario.rol !== "completo") return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve el monitor." });
+  if (!["monitor", "completo", "existencia"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve el monitor." });
   try {
     const filas = await sql`
       SELECT x.no_inventario, x.quien, x.cuando, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.registrado_por IS NOT NULL AS nuevo,

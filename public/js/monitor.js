@@ -1,4 +1,4 @@
-﻿// Monitor de existencias: consulta cada 4 s mientras la pestaña está visible.
+// Monitor de existencias: consulta cada 4 s mientras la pestaña está visible.
 (() => {
   "use strict";
   const GRUPOS = [["Todos", null, ""], ["Baja definitiva", "Baja definitiva", "baja"], ["Para reaprovechamiento", "Para reaprovechamiento", "reap"], ["DIF", "Propuesta DIF", "dif"]];
@@ -62,7 +62,7 @@
     const timeout = setTimeout(() => control.abort(), 15000);
     try {
       const r = await fetch("/api/monitor-existencias", { headers: { Authorization: "Bearer " + localStorage.getItem("token") }, cache: "no-store", signal: control.signal });
-      if (r.status === 401) { localStorage.clear(); location.href = "index.html"; return; }
+      if (r.status === 401 || r.status === 403) { localStorage.clear(); location.href = "index.html"; return; }
       if (!r.ok) throw new Error("Error de conexión");
       const j = await r.json();
       if (!j.ok || !Array.isArray(j.confirmados) || !Number.isFinite(Number(j.total)) || Number(j.total) < 0) throw new Error("Respuesta inválida");
