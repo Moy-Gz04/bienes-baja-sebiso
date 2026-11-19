@@ -239,7 +239,7 @@
 .rg-bienes li.pc, .rg-card .rg-bienes li.pc{ background:#DCEBFF; color:#0B4FA8; text-shadow:none; cursor:default; }
 .rg-bienes li.pc small, .rg-card .rg-bienes li.pc small{ color:#2F6FC4; }
 .rg-bienes li.pc .bi{ font-size:10px; }
-.rg-total-pc{ display:inline-flex; align-items:center; gap:3px; margin-top:3px; padding:1px 7px; border-radius:999px; background:#DCEBFF; color:#0B4FA8; font-size:10.5px; font-style:normal; font-weight:800; text-shadow:none; }
+.rg-total-pc{ display:flex; width:max-content; align-items:center; gap:3px; margin:4px auto 0; padding:1px 7px; border-radius:999px; background:#DCEBFF; color:#0B4FA8; font-size:10.5px; font-style:normal; font-weight:800; text-shadow:none; }
 .rg-card .tv-btn.rg-pdf-pc, .tv-btn.rg-btn-pc{ background:#1D5FBF; border-color:#1D5FBF; color:#fff; text-shadow:none; }
 .rg-card .tv-btn.rg-pdf-pc:hover, .tv-btn.rg-btn-pc:hover{ background:#164C9A; border-color:#164C9A; color:#fff; }
 .rg-pie .rg-pdf + .rg-pdf-pc{ margin-left:0; }
