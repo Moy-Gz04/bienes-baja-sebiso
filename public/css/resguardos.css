@@ -279,3 +279,30 @@
 .rg-card .rg-bienes{ align-self:start; }
 .rg-card .rg-pie{ align-self:end; }
 @media (max-width:700px){ .rg-card{ height:auto; min-height:300px; } }
+
+/* ===== Tarjeta blanca con contorno guinda y botones del mismo tamaño (2026-11-19) ===== */
+.rg-card, .rg-card:hover{ background:#fff; border:3px solid #691C32; border-radius:18px; box-shadow:0 0 0 4px rgba(188,149,92,.18), 0 8px 20px rgba(105,28,50,.10); }
+.rg-card:hover{ border-color:#9F2241; box-shadow:0 0 0 4px rgba(188,149,92,.32), 0 12px 26px rgba(105,28,50,.18); }
+.rg-card .rg-datos h3, .rg-card .rg-total b{ color:#691C32; }
+.rg-card .rg-cargo, .rg-card .rg-total span{ color:#5A4A50; }
+.rg-card .rg-jefe{ color:#8A7880; }
+.rg-card .rg-foto img, .rg-card .rg-ini{ border:2px solid #fff; box-shadow:0 0 0 2px #BC955C; background:#F6EFE9; color:#691C32; }
+.rg-card .rg-bienes{ border-top:1.5px solid #EADFD3; }
+.rg-card .rg-bienes li{ background:#F8F2EC; color:#691C32; border:1px solid #EADFD3; }
+.rg-card .rg-bienes li[data-inv]:hover{ background:#F1E6DC; }
+.rg-card .rg-bienes li.ok, .rg-card .rg-bienes li.ok:hover{ background:#EAF6EE; color:#1E6B3F; border-color:#BFE3CB; }
+.rg-card .rg-bienes li.pc, .rg-card .rg-bienes li.pc:hover{ background:#EAF2FF; color:#0B4FA8; border-color:#B9D3F7; }
+.rg-card.vacante, .rg-card.vacante:hover{ background:#FDFBF8; border:3px dashed #9F2241; }
+/* pie: cuadrícula de 2 columnas, todos los botones iguales */
+.rg-card .rg-pie{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.rg-card .rg-pie > *{ display:flex; align-items:center; justify-content:center; gap:5px; width:100%; height:32px; margin:0 !important; padding:0 8px; box-sizing:border-box; border-radius:9px; font:700 11.5px 'Montserrat',sans-serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; }
+.rg-card .tv-btn, .rg-card .rg-mas{ background:#fff; border:1.5px solid #691C32; color:#691C32; }
+.rg-card .tv-btn:hover, .rg-card .rg-mas:hover{ background:#691C32; border-color:#691C32; color:#fff; }
+.rg-card .tv-btn.rg-pdf-pc{ background:#1D5FBF; border-color:#1D5FBF; color:#fff; }
+.rg-card .tv-btn.rg-pdf-pc:hover{ background:#164C9A; border-color:#164C9A; }
+.rg-card .rg-pend{ background:#FFF4DC; border:1.5px solid #E8C77A; color:#8A5A00; }
+.rg-card .rg-borrar{ border-color:#A32D2D; color:#A32D2D; }
+.rg-card{ position:relative; overflow:visible; }
+.rg-card .rg-pend-top{ position:absolute; top:-12px; left:50%; transform:translateX(-50%); z-index:1; height:22px; padding:0 10px; display:inline-flex; align-items:center; gap:4px; border-radius:99px; background:#FFF4DC; border:1.5px solid #E8C77A; color:#8A5A00; font:700 10.5px 'Montserrat',sans-serif; white-space:nowrap; }
+.rg-card .rg-pie > :last-child:nth-child(odd){ grid-column:1 / -1; }
+.rg-grid{ row-gap:18px; }
