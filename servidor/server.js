@@ -44,6 +44,11 @@ sql`CREATE TABLE IF NOT EXISTS comprobaciones (
   no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, valor BOOLEAN NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar comprobaciones:", e.message));
 
+// Confirmación de existencia física (rol "existencia"): si hay fila, el bien está confirmado
+sql`CREATE TABLE IF NOT EXISTS existencias (
+  no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("No se pudo preparar existencias:", e.message));
+
 sql`CREATE TABLE IF NOT EXISTS fotos_drive (nombre TEXT PRIMARY KEY, drive_id TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("fotos_drive:", e.message));
 
@@ -63,7 +68,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos"], version: "drive-2026-11-17" }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia"], version: "existencia-2026-11-18" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -79,7 +84,7 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
     intentos.delete(ip);
-    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol, ...(u.unidad ? { unidad: u.unidad } : {}) }, SECRETO, { expiresIn: "8h" }), area: u.area, rol: u.rol });
+    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol, ...(u.unidad ? { unidad: u.unidad } : {}) }, SECRETO, { expiresIn: u.rol === "existencia" ? "30d" : "8h" }), area: u.area, rol: u.rol });
   } catch (e) { fallo(res, e, "No se pudo iniciar sesión."); }
 });
 
@@ -91,6 +96,10 @@ function sesion(req, res, next) {
     req.soloComprobar = req.usuario.rol === "comprobar";   // solo ve Propuesta DIF y marca palomita / equis
     req.soloMudanza = req.usuario.rol === "mudanza";       // solo entra a Inventario · Mudanza y solo de su unidad presupuestal
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
+    // rol "existencia": solo consulta bienes, ve su ficha y confirma su existencia (trabaja sin internet: sesión de 30 días)
+    req.soloExistencia = req.usuario.rol === "existencia";
+    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
+      return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
@@ -107,7 +116,8 @@ app.get("/api/bienes", sesion, async (req, res) => {
         (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
         (SELECT max(c.quien || '|' || to_char(c.cuando, 'YYYY-MM-DD')) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario) AS foto_captura,
         fc.datos AS fc_datos, fc.quien AS fc_quien, to_char(fc.cuando, 'YYYY-MM-DD HH24:MI') AS fc_cuando,
-        EXISTS (SELECT 1 FROM captura_omitida o WHERE o.no_inventario = b.no_inventario) AS captura_omitida
+        EXISTS (SELECT 1 FROM captura_omitida o WHERE o.no_inventario = b.no_inventario) AS captura_omitida,
+        (SELECT x.quien || '|' || to_char(x.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') FROM existencias x WHERE x.no_inventario = b.no_inventario) AS existencia
       FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN comprobaciones k USING (no_inventario) LEFT JOIN ficha_capturas fc USING (no_inventario)
       ORDER BY length(b.no_inventario), b.no_inventario`;
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
@@ -124,6 +134,15 @@ app.get("/api/bienes", sesion, async (req, res) => {
       clasificacion: capturado || b.clasificacion,
       estatus_capturado: capturado ? { clasificacion: capturado, quien: capturo, cuando: new Date(capturado_en).toISOString() } : null,
     }));
+    if (req.soloExistencia) {
+      const CAMPOS = ["no_inventario", "descripcion", "marca", "modelo", "serie", "material", "color", "ubicacion", "edificio", "unidad_presupuestal", "adscripcion", "organo_superior",
+        "clave_armonizada", "cog", "moi", "fecha_adquisicion", "estado_fisico", "estado_ficha", "condicion_foto", "caracteristicas", "folio_fiscal", "propuesta_dif", "fotos", "tiene_pdf", "ficha", "clasificacion"];
+      return res.json({ ok: true, rol: "existencia", bienes: bienes.map(b => {
+        const x = Object.fromEntries(CAMPOS.map(k => [k, b[k]]));
+        const [quien, cuando] = b.existencia ? b.existencia.split("|") : [];
+        return { ...x, clasificacion_bien: b.clasificacion, existencia: b.existencia ? { quien, cuando } : null, clasificacion: b.existencia ? "Confirmados" : "Por confirmar", puede_capturar_fotos: false, avisos: [], filas: [] };
+      }) });
+    }
     if (req.soloComprobar) {
       const grupo = (k) => !k ? "Por comprobar" : k.valor ? "Comprobado" : "No comprobado";
       return res.json({ ok: true, rol: "comprobar", bienes: bienes.filter(b => b.clasificacion === "Propuesta DIF")
@@ -173,6 +192,25 @@ app.post("/api/comprobado", sesion, async (req, res) => {
       RETURNING valor, quien, to_char(cuando, 'YYYY-MM-DD HH24:MI') AS cuando`;
     res.json({ ok: true, comprobado: k });
   } catch (e) { fallo(res, e, "No se pudo guardar la comprobación."); }
+});
+
+// ── Confirmar existencia (confirmado = true) o regresarlo a "Por confirmar" (false). Llega también desde la cola sin internet
+// con la hora en que se hizo en el equipo (cuando); se respeta esa hora si es razonable.
+app.post("/api/existencia", sesion, async (req, res) => {
+  if (!req.soloExistencia && req.usuario.rol !== "completo") return res.status(403).json({ ok: false, mensaje: "Tu usuario no confirma existencias." });
+  try {
+    const inv = String(req.body?.no_inventario || ""), conf = req.body?.confirmado;
+    if (typeof conf !== "boolean") return res.status(400).json({ ok: false, mensaje: "Indica si se confirma o se regresa." });
+    const [b] = await sql`SELECT 1 FROM bienes WHERE no_inventario = ${inv}`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: `El bien ${inv} ya no existe en el sistema.` });
+    if (!conf) { await sql`DELETE FROM existencias WHERE no_inventario = ${inv}`; return res.json({ ok: true, existencia: null }); }
+    let cuando = new Date(req.body?.cuando || Date.now());
+    if (isNaN(cuando) || cuando > new Date(Date.now() + 5 * 60000) || cuando < new Date(Date.now() - 60 * 86400000)) cuando = new Date();
+    const [x] = await sql`INSERT INTO existencias (no_inventario, quien, cuando) VALUES (${inv}, ${req.usuario.usuario || "—"}, ${cuando.toISOString()})
+      ON CONFLICT (no_inventario) DO UPDATE SET quien = EXCLUDED.quien, cuando = EXCLUDED.cuando
+      RETURNING quien, to_char(cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS cuando`;
+    res.json({ ok: true, existencia: x });
+  } catch (e) { fallo(res, e, "No se pudo guardar la confirmación."); }
 });
 
 // ── Captura de las 3 fotos de un bien que no tenía (desde el celular). Se pueden volver a tomar.

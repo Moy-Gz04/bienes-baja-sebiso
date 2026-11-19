@@ -313,3 +313,41 @@ html{ touch-action:manipulation; -webkit-text-size-adjust:100%; }
 .b-quitar{ margin-top:6px; display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border:1px solid #d8c9a0; border-radius:999px; background:#fff8e6; color:#7a5600; font:600 12px inherit; cursor:pointer; }
 .b-quitar:hover{ background:#ffefc2; }
 .b-area-dif{ display:inline-block; margin-top:4px; padding:2px 9px; border-radius:999px; background:#f3e3e8; color:#691C32; font-weight:700; font-size:11px; }
+
+/* usuario de confirmación de existencia: consulta, ficha y un botón; trabaja sin internet */
+.b-sync{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 12px; padding:10px 14px; border-radius:12px; font-size:12.5px; font-weight:500; line-height:1.4; background:var(--suave, #F6F1F2); }
+.b-sync[hidden]{ display:none; }
+.b-sync b{ font-weight:800; }
+.b-sync ul{ margin:6px 0 0; padding-left:18px; }
+.b-sync .tv-btn{ flex:none; padding:6px 12px; font-size:12px; }
+.b-sync.off{ background:#FFF4DC; color:#8A5A00; }
+.b-sync.mal{ background:#FBEAEA; color:#A32D2D; }
+.b-sync.env{ background:#E8F1FB; color:#1D4F86; }
+.b-exist{ display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border:1.5px solid var(--g); border-radius:999px; background:#fff; color:var(--g); font:700 12px 'Montserrat',sans-serif; cursor:pointer; white-space:nowrap; transition:background .15s, color .15s, transform .1s; }
+.b-exist:hover{ background:var(--g); color:#fff; }
+.b-exist:active{ transform:scale(.97); }
+.b-exist:focus-visible, .b-exist-reg:focus-visible{ outline:2px solid var(--g); outline-offset:2px; }
+.b-exist-ok{ display:inline-flex; flex-direction:column; align-items:flex-start; color:#2F8A5B; font:700 12px 'Montserrat',sans-serif; vertical-align:middle; }
+.b-exist-ok i{ margin-right:4px; }
+.b-exist-ok small{ font-weight:500; font-size:10.5px; color:var(--txt2, #6B5A5F); }
+.b-exist-reg{ width:32px; height:32px; margin-left:8px; border:1px solid var(--borde); border-radius:8px; background:#fff; color:var(--txt2, #6B5A5F); display:inline-grid; place-items:center; cursor:pointer; vertical-align:middle; font-size:15px; }
+.b-exist-reg:hover{ color:#B3261E; border-color:#B3261E; background:#FBEDEC; }
+.b-exist-dlg.reg{ color:#B3261E; border-color:#E8C3C0; }
+body.solo-existencia .b-barra select{ display:none; }
+body.solo-existencia .b-barra{ grid-template-columns:1fr; }
+body.solo-existencia .b-grupos{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media (max-width:900px){
+  body.solo-existencia #bTabla tr{ grid-template-columns:56px minmax(0,1fr) auto; grid-template-areas:"foto num num" "foto desc desc" "foto clas clas" "comp comp comp"; }
+  body.solo-existencia #bTabla td:nth-child(5), body.solo-existencia #bTabla td:nth-child(6){ display:none; }
+  body.solo-existencia #bTabla td:nth-child(8){ padding-top:6px; display:flex; align-items:center; justify-content:space-between; }
+  body.solo-existencia .b-exist{ width:100%; justify-content:center; padding:12px; font-size:14px; }
+  body.solo-existencia .b-exist-reg{ width:44px; height:44px; }
+}
+.b-acciones [hidden]{ display:none !important; }   /* en celular .tv-btn trae display:flex y le ganaba a hidden */
+@media (max-width:900px){
+  body.solo-existencia .b-grupos{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:visible; margin:0 0 8px; padding:0; }
+  body.solo-existencia .b-grupo{ flex-direction:column; align-items:flex-start; gap:0; padding:7px 10px 7px 12px; }
+  body.solo-existencia .b-grupo span{ font-size:11px; }
+  body.solo-existencia .b-grupo b{ font-size:18px; }
+  body.solo-existencia .b-grupo small{ display:none; }
+}

@@ -3,6 +3,8 @@ let SOLO_CAPTURA = false;   // usuario que solo toma fotos de los bienes que no 
 const estado = { grupo: "", abierto: null, foto: 0, vista: [] };
 let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
 const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
+let SOLO_EXISTENCIA = false; // usuario que solo consulta y confirma la existencia física (funciona sin internet)
+const GRUPOS_EXISTENCIA = [["", "Todos"], ["Por confirmar", "Por confirmar"], ["Confirmados", "Confirmados"]];
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
@@ -15,7 +17,7 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja", "Por confirmar": "dif", "Confirmados": "reap" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
 // Datos que se revisan para el apartado "Capturar datos"
 const DATOS_CLAVE = [["marca", "marca"], ["modelo", "modelo"], ["serie", "serie"], ["material", "material"], ["color", "color"], ["adscripcion", "adscripción"],
@@ -100,14 +102,15 @@ function pintar() {
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
       <td class="b-num">${esc(b.no_inventario)}</td>
       <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small>${b.clasificacion === "Propuesta DIF" && b.propuesta_dif ? `<small class="b-area-dif">Área: ${esc(b.propuesta_dif)}</small>` : ""}${estado.grupo === "__capturar" ? `<small class="b-faltan">Falta: ${esc(faltantes(b).join(", "))}</small><button type="button" class="b-quitar" data-quitar title="Quitar de Capturar datos"><i class="bi bi-x-circle"></i> Quitar de este apartado</button>` : ""}</span></td>
-      <td><span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span>${b.propuesta_dif ? `<small class="b-sub">${esc(b.propuesta_dif)}</small>` : ""}</td>
+      <td><span class="b-pill ${clase(clasDe(b))}">${esc(clasDe(b))}</span>${b.propuesta_dif ? `<small class="b-sub">${esc(b.propuesta_dif)}</small>` : ""}</td>
       <td class="b-c">${estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "—"}</td>
       <td class="b-d">${pesos(b.moi)}</td>
       <td class="b-c"><button type="button" class="p-icono b-ver" title="Ver ficha técnica" aria-label="Ver ficha técnica del ${esc(b.no_inventario)}"><i class="bi bi-file-earmark-text"></i></button></td>
-      ${SOLO_CAPTURA ? "" : `<td class="b-c b-comp">${comprobacion(b)}</td>`}
+      ${SOLO_CAPTURA ? "" : `<td class="b-c b-comp">${SOLO_EXISTENCIA ? botonExistencia(b) : comprobacion(b)}</td>`}
     </tr>`).join("") || `<tr><td colspan="8" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
   $("bConteo").textContent = `${lista.length.toLocaleString("es-MX")} ${lista.length === 1 ? "bien" : "bienes"}`;
   const total = lista.reduce((s, b) => s + (b.moi || 0), 0);
+  if (SOLO_EXISTENCIA) { const c = lista.filter(b => b.existencia).length; $("bResumen").innerHTML = `<span><b>${lista.length.toLocaleString("es-MX")}</b> bienes</span><span><b>${c.toLocaleString("es-MX")}</b> confirmados</span><span><b>${(lista.length - c).toLocaleString("es-MX")}</b> por confirmar</span>`; return; }
   $("bResumen").innerHTML = `<span><b>${lista.length.toLocaleString("es-MX")}</b> bienes</span><span><b>${pesos(total)}</b> valor M.O.I.</span><span><b>${lista.filter(b => b.fotos.length).length.toLocaleString("es-MX")}</b> con fotos</span><span><b>${lista.filter(b => b.ficha).length.toLocaleString("es-MX")}</b> con ficha previa</span>`;
 }
 
@@ -125,11 +128,15 @@ const DATOS = [
 ];
 const valor = (b, c) => (typeof c === "function" ? c(b) : b[c]) || "";
 
+const DATOS_EXISTENCIA = [["No. inventario", "no_inventario"], ["Clave armonizada", "clave_armonizada"], ["COG", "cog"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"],
+  ["Material", "material"], ["Color", "color"], ["Ubicación", (b) => b.ubicacion || b.edificio], ["M.O.I.", (b) => pesos(b.moi)], ["Fecha de adquisición", (b) => fecha(b.fecha_adquisicion)],
+  ["Estado físico", (b) => estadoDe(b)], ["Clasificación", "clasificacion_bien"], ["Existencia", (b) => b.existencia ? "Confirmada · " + b.existencia.quien + " · " + b.existencia.cuando : "Por confirmar"],
+  ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"], ["Folio fiscal", "folio_fiscal", 3]];
 const DATOS_CAPTURA = [["No. inventario", "no_inventario"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"], ["Material", "material"], ["Color", "color"],
   ["Ubicación", (b) => b.ubicacion || b.edificio, 3], ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"]];
 
 function fichaHTML(b) {
-  return `<dl class="b-datos">${(SOLO_CAPTURA ? DATOS_CAPTURA : DATOS).map(([t, c, ancho]) => `<div${ancho ? ` class="a${ancho}"` : ""}><dt>${t}</dt><dd>${esc(valor(b, c)) || "—"}</dd></div>`).join("")}</dl>
+  return `<dl class="b-datos">${(SOLO_CAPTURA ? DATOS_CAPTURA : SOLO_EXISTENCIA ? DATOS_EXISTENCIA : DATOS).map(([t, c, ancho]) => `<div${ancho ? ` class="a${ancho}"` : ""}><dt>${t}</dt><dd>${esc(valor(b, c)) || "—"}</dd></div>`).join("")}</dl>
     ${b.caracteristicas ? `<p class="b-texto"><b>Características</b>${esc(b.caracteristicas)}</p>` : ""}
     ${avisoFicha(b)}
     ${b.pendiente && !b.estatus_capturado ? `<p class="b-nota b-nota-pend"><i class="bi bi-exclamation-triangle"></i> ${esc(b.pendiente)}</p>` : ""}
@@ -139,7 +146,7 @@ function fichaHTML(b) {
 // ── Ficha generada en el servidor (al completar datos o tomar fotos)
 function avisoFicha(b) {
   const g = b.ficha_generando;
-  if (!g || SOLO_COMPROBAR) return "";
+  if (!g || SOLO_COMPROBAR || SOLO_EXISTENCIA) return "";
   if (g.estado === "generando") return `<p class="b-nota b-nota-gen" role="status"><i class="bi bi-hourglass-split"></i> Generando ficha… (se sube a Drive en unos segundos)</p>`;
   if (g.estado === "lista") return `<p class="b-nota b-nota-gen lista" role="status"><i class="bi bi-check-circle"></i> La ficha ya está generada y en Drive.</p>`;
   return `<p class="b-nota b-nota-gen error" role="status"><i class="bi bi-exclamation-triangle"></i> No se pudo generar la ficha: ${esc(g.error || "")}</p>`;
@@ -256,11 +263,12 @@ function verFicha(inv) {
   if (estado.abierto !== b) { captura.fotos = [null, null, null]; captura.rehacer = false; $("bCapMsg").textContent = ""; }
   estado.abierto = b; estado.foto = 0;
   $("bTitulo").textContent = b.descripcion || `Bien ${b.no_inventario}`;
-  $("bChips").innerHTML = `<span class="b-pill ${clase(b.clasificacion)}">${esc(b.clasificacion)}</span><span class="b-inv">No. ${esc(b.no_inventario)}</span>`
+  $("bChips").innerHTML = `<span class="b-pill ${clase(clasDe(b))}">${esc(clasDe(b))}</span>${SOLO_EXISTENCIA ? `<span class="b-pill ${clase(b.clasificacion)}">${b.existencia ? "Existencia confirmada" : "Por confirmar"}</span>` : ""}<span class="b-inv">No. ${esc(b.no_inventario)}</span>`
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
   $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
-  $("bCompletar").hidden = SOLO_CAPTURA || SOLO_COMPROBAR;
+  if (SOLO_EXISTENCIA) { $("bDescargar").hidden = true; pintarBotonExistencia(b); }
+  $("bCompletar").hidden = SOLO_CAPTURA || SOLO_COMPROBAR || SOLO_EXISTENCIA;
   if (b.ficha_generando && b.ficha_generando.estado === "generando") vigilarFicha(b);
   $("bCaptura").hidden = !b.pendiente;
   if (b.pendiente) {
@@ -306,6 +314,10 @@ window.addEventListener("popstate", () => {
 
 // El PDF vive en Drive: el servidor da un enlace que dura unos minutos y lo entrega
 async function enlacePdf(b) {
+  if (SOLO_EXISTENCIA) {   // sin internet: la ficha guardada en este equipo (si ya se abrió antes)
+    try { const r = await fetch(`/api/ficha/${encodeURIComponent(b.no_inventario)}/enlace`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } }); const d = await r.json(); if (d.url) return d.url; } catch (e) {}
+    return `/api/ficha/${encodeURIComponent(b.no_inventario)}/pdf`;
+  }
   const r = await fetch(`/api/ficha/${encodeURIComponent(b.no_inventario)}/enlace`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
   if (r.status === 401) { location.href = "index.html"; return null; }
   return (await r.json()).url;
@@ -387,15 +399,28 @@ function imprimir() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   $("bCuerpo").innerHTML = `<tr><td colspan="7" class="tv-vacio">Cargando bienes…</td></tr>`;
-  const r = await fetch("/api/bienes", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
-  if (r.status === 401) { location.href = "index.html"; return; }
-  const respuesta = await r.json();
+  let respuesta;
+  if (localStorage.getItem("rol") === "existencia") { respuesta = await cargarExistencia(); if (!respuesta) return; }
+  else {
+    const r = await fetch("/api/bienes", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+    if (r.status === 401) { location.href = "index.html"; return; }
+    respuesta = await r.json();
+  }
   BIENES = respuesta.bienes;
   if (respuesta.rol === "captura") {
     SOLO_CAPTURA = true; document.querySelector(".b-comp-th")?.remove(); GRUPOS = GRUPOS_CAPTURA; estado.grupo = "Faltan fotos";
     document.body.classList.add("solo-captura");
     document.querySelector(".tv-eyebrow").textContent = "Captura de fotos";
     document.querySelector(".tv-cabeza h1").textContent = "Bienes sin fotos";
+  }
+  if (respuesta.rol === "existencia") {
+    SOLO_EXISTENCIA = true; GRUPOS = GRUPOS_EXISTENCIA; estado.grupo = "Por confirmar";
+    document.body.classList.add("solo-existencia");
+    document.querySelector(".tv-eyebrow").textContent = "Inventario de bienes";
+    document.querySelector(".tv-cabeza h1").textContent = "Confirmación de existencia";
+    document.querySelector(".b-comp-th").textContent = "Existencia";
+    $("bExistencia").addEventListener("click", () => estado.abierto && marcarExistencia(estado.abierto.no_inventario));
+    aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
   if (respuesta.rol === "comprobar") {
     SOLO_COMPROBAR = true; GRUPOS = GRUPOS_COMPROBAR; estado.grupo = "Por comprobar";
@@ -412,7 +437,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     estado.grupo = g.dataset.grupo; pintarGrupos(); pintar();
   });
   ["bBuscar", "bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", pintar));
-  $("bCuerpo").addEventListener("click", (e) => { const q = e.target.closest("[data-quitar]"); if (q) { e.stopPropagation(); quitarDeCaptura(q.closest("tr").dataset.inv); return; } const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
+  $("bCuerpo").addEventListener("click", (e) => { const q = e.target.closest("[data-quitar]"); if (q) { e.stopPropagation(); quitarDeCaptura(q.closest("tr").dataset.inv); return; } const x = e.target.closest("[data-exist]"); if (x) { e.stopPropagation(); marcarExistencia(x.closest("tr").dataset.inv); return; } const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
   $("bMiniaturas").addEventListener("click", (e) => { const m = e.target.closest("button"); if (m) { estado.foto = +m.dataset.i; mostrarFoto(); } });
   const mover = (d) => { const n = estado.abierto.fotos.length; if (n) { estado.foto = (estado.foto + d + n) % n; mostrarFoto(); } };
   $("bFotoAnt").addEventListener("click", () => mover(-1));
@@ -426,7 +451,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("bFoto").addEventListener("click", () => window.open($("bFoto").src, "_blank"));
   $("bImprimir").addEventListener("click", () => verPdf(estado.abierto));
-  $("bGraficas").hidden = SOLO_CAPTURA || SOLO_COMPROBAR;
+  $("bGraficas").hidden = SOLO_CAPTURA || SOLO_COMPROBAR || SOLO_EXISTENCIA;
   $("bGraficas").addEventListener("click", () => { pintarGraficas(); abrir($("bGraf")); });
   $("bGrafCerrar").addEventListener("click", () => cerrar($("bGraf")));
   // recuadro con el detalle al pasar el cursor o tocar una barra
@@ -478,5 +503,156 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
   $("bOpciones").addEventListener("click", (e) => { const o = e.target.closest("button"); if (o) capturar(o.dataset.v); });
   $("bQuitar").addEventListener("click", () => capturar(null));
-  pintar();
+  pintar(); pintarSync();
 });
+
+// ── Confirmación de existencia (rol "existencia") y trabajo sin internet ─────────────────────────────
+// La lista de bienes se guarda en este equipo (IndexedDB) para abrir sin red. Cada confirmación se guarda primero en la
+// cola y luego se aplica en pantalla; la cola se envía en orden en cuanto hay internet y solo sale de ella cuando el
+// servidor la confirmó. Si el servidor la rechaza pasa a "rechazadas" y queda visible con opción de reintentar.
+const clasDe = (b) => SOLO_EXISTENCIA ? (b.clasificacion_bien || "") : b.clasificacion;
+const abrirBD = () => new Promise((ok, mal) => {
+  const r = indexedDB.open("bienes-existencia", 1);
+  r.onupgradeneeded = () => { const d = r.result; d.createObjectStore("cola", { keyPath: "id", autoIncrement: true }); d.createObjectStore("rechazadas", { keyPath: "id" }); d.createObjectStore("datos"); };
+  r.onsuccess = () => ok(r.result); r.onerror = () => mal(r.error);
+});
+let _bd; const bd = () => (_bd ||= abrirBD());
+async function tx(tabla, modo, fn) {
+  const d = await bd();
+  return new Promise((ok, mal) => {
+    const t = d.transaction(tabla, modo); let res; const q = fn(t.objectStore(tabla));
+    if (q) q.onsuccess = () => { res = q.result; };
+    t.oncomplete = () => ok(res); t.onerror = t.onabort = () => mal(t.error);
+  });
+}
+const guardarCopia = () => tx("datos", "readwrite", s => s.put({ ok: true, rol: "existencia", bienes: BIENES.map(({ indice, ...b }) => b), guardada: Date.now() }, "bienes")).catch(() => {});
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const sync = { sinRed: false, sesion: false, copia: false, enviando: false, pend: 0, rech: [] };
+const sinRed = () => !navigator.onLine || sync.sinRed;
+const yo = () => { try { return JSON.parse(atob(localStorage.getItem("token").split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).usuario || "—"; } catch (e) { return "—"; } };
+const horaLocal = (iso) => { const d = new Date(iso), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+function aplicarOp(op) {
+  const b = BIENES.find(x => x.no_inventario === op.no_inventario); if (!b) return;
+  b.existencia = op.confirmado ? { quien: yo(), cuando: horaLocal(op.cuando) } : null;
+  b.clasificacion = b.existencia ? "Confirmados" : "Por confirmar";
+}
+const aplicarCola = (ops) => ops.forEach(aplicarOp);
+
+async function cargarExistencia() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.storage?.persist?.().catch(() => {});
+  { const el = document.createElement("div"); el.id = "bSync"; el.className = "b-sync"; el.hidden = true; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); $("bGrupos").before(el);
+    el.addEventListener("click", async (e) => {
+      if (e.target.closest("#bSyncSesion")) { location.href = "index.html"; return; }
+      if (!e.target.closest("#bSyncReintentar")) return;
+      for (const x of sync.rech) { const { id, mensaje, ...op } = x; await tx("cola", "readwrite", s => s.add(op)); await tx("rechazadas", "readwrite", s => s.delete(id)); }
+      await refrescarSync(); enviarCola();
+    }); }
+  await enviarCola();
+  let d = null;
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 25000);
+    const r = await fetch("/api/bienes", { signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token") } }).finally(() => clearTimeout(t));
+    if (r.status === 401) { sync.sesion = true; await refrescarSync(); if (!sync.pend) { localStorage.removeItem("token"); location.href = "index.html"; return null; } }
+    else d = await r.json();
+  } catch (e) { sync.sinRed = true; }
+  if (d?.ok) { sync.copia = false; tx("datos", "readwrite", s => s.put({ ...d, guardada: Date.now() }, "bienes")).catch(() => {}); }
+  else {
+    const copia = await tx("datos", "readonly", s => s.get("bienes")).catch(() => null);
+    if (!copia) { $("bCuerpo").innerHTML = `<tr><td colspan="8" class="tv-vacio">${esc(d?.mensaje || "Sin internet y todavía no hay datos guardados en este equipo. Abre esta página una vez con internet.")}</td></tr>`; return null; }
+    d = copia; sync.copia = true;
+  }
+  await refrescarSync();
+  window.addEventListener("online", () => { sync.sinRed = false; pintarSync(); enviarCola(); });
+  window.addEventListener("offline", pintarSync);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) enviarCola(); });
+  setInterval(() => { if (sync.pend && !sync.sesion) enviarCola(); }, 15000);
+  return d;
+}
+
+function pintarSync() {
+  const el = $("bSync"); if (!el) return;
+  const off = sinRed(), n = sync.pend, r = sync.rech;
+  let cls = "", html = "";
+  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
+  else if (sync.sesion && n) { cls = "mal"; html = `<div><b><i class="bi bi-person-lock"></i> Tu sesión venció.</b> Tus ${n} cambios siguen guardados en este equipo; inicia sesión de nuevo y se subirán solos.</div><button type="button" class="tv-btn" id="bSyncSesion">Iniciar sesión</button>`; }
+  else if (off) { cls = "off"; html = `<div><b><i class="bi bi-wifi-off"></i> Sin internet.</b> Puedes seguir confirmando${n ? `; hay ${n} ${n === 1 ? "cambio guardado" : "cambios guardados"} en este equipo` : ""} y se subirán solos cuando vuelva.</div>`; }
+  else if (n) { cls = "env"; html = `<div><b><i class="bi bi-cloud-arrow-up"></i> Subiendo ${n} ${n === 1 ? "cambio" : "cambios"}…</b> Están guardados en este equipo.</div>`; }
+  else if (sync.copia) { cls = "off"; html = `<div><b><i class="bi bi-hdd"></i> Mostrando la última copia guardada.</b> No se pudo conectar con el servidor.</div>`; }
+  el.hidden = !html; el.className = "b-sync " + cls; el.innerHTML = html;
+}
+async function refrescarSync() {
+  try { sync.pend = await tx("cola", "readonly", s => s.count()); sync.rech = await tx("rechazadas", "readonly", s => s.getAll()); } catch (e) {}
+  pintarSync();
+}
+const permanente = (s) => s >= 400 && s < 500 && ![401, 408, 425, 429].includes(s);
+async function enviarCola() {
+  if (sync.enviando) return; sync.enviando = true; sync.sesion = false;
+  try {
+    for (;;) {
+      const op = (await tx("cola", "readonly", s => s.getAll()))[0]; if (!op) break;
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
+      let r;
+      try { r = await fetch("/api/existencia", { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify({ no_inventario: op.no_inventario, confirmado: op.confirmado, cuando: op.cuando, opId: op.opId }) }); }
+      catch (e) { sync.sinRed = true; break; } finally { clearTimeout(t); }
+      if (r.status === 401) { sync.sesion = true; break; }
+      if (r.status >= 500 || !(r.ok || permanente(r.status))) { sync.sinRed = true; break; }   // servidor dormido o saturado: se reintenta
+      sync.sinRed = false;
+      const d = await r.json().catch(() => null);
+      if (d?.ok) await tx("cola", "readwrite", s => s.delete(op.id));
+      else {
+        await tx("rechazadas", "readwrite", s => s.put({ ...op, mensaje: d?.mensaje || "El servidor lo rechazó." }));   // primero se guarda, luego sale de la cola
+        await tx("cola", "readwrite", s => s.delete(op.id));
+      }
+      await refrescarSync();
+    }
+  } catch (e) { sync.sinRed = true; }
+  sync.enviando = false; await refrescarSync();
+  if (sync.copia && !sync.pend && !sync.sinRed && !sync.sesion && BIENES.length) recargarDatos();
+}
+// Volvió la red y ya no hay pendientes: se toma lo real del servidor en lugar de la copia guardada
+async function recargarDatos() {
+  try {
+    const r = await fetch("/api/bienes", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+    const d = r.ok ? await r.json() : null; if (!d?.ok || sync.pend) return;
+    BIENES = d.bienes; sync.copia = false;
+    BIENES.forEach(b => { b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.cog, b.clave_armonizada, b.adscripcion, b.unidad_presupuestal, b.edificio, b.folio_fiscal, b.propuesta_dif, b.caracteristicas, b.material, b.color, b.ubicacion].join(" ")); });
+    tx("datos", "readwrite", s => s.put({ ...d, guardada: Date.now() }, "bienes")).catch(() => {});
+    const abierto = estado.abierto && $("bDialogo").open ? estado.abierto.no_inventario : null;
+    pintarGrupos(); pintar(); pintarSync();
+    if (abierto) verFicha(abierto);
+  } catch (e) {}
+}
+
+function botonExistencia(b) {
+  if (!b.existencia) return `<button type="button" class="b-exist" data-exist aria-label="Confirmar existencia del ${esc(b.no_inventario)}"><i class="bi bi-check2-circle"></i> Confirmar existencia</button>`;
+  return `<span class="b-exist-ok" title="${esc(b.existencia.quien)} · ${esc(b.existencia.cuando)}"><i class="bi bi-patch-check-fill"></i> Confirmado<small>${esc(b.existencia.cuando)}</small></span><button type="button" class="b-exist-reg" data-exist title="Regresar a Por confirmar" aria-label="Regresar el ${esc(b.no_inventario)} a Por confirmar"><i class="bi bi-arrow-counterclockwise"></i></button>`;
+}
+function pintarBotonExistencia(b) {
+  const x = $("bExistencia"); x.hidden = false;
+  x.className = "tv-btn b-exist-dlg" + (b.existencia ? " reg" : " tv-btn-principal");
+  x.innerHTML = b.existencia ? `<i class="bi bi-arrow-counterclockwise"></i> Regresar a Por confirmar` : `<i class="bi bi-check2-circle"></i> Confirmar existencia`;
+}
+let marcando = false;
+async function marcarExistencia(inv) {
+  const b = BIENES.find(x => x.no_inventario === inv); if (!b || marcando) return;
+  const confirmado = !b.existencia;
+  const desc = [b.descripcion, b.marca && b.marca !== "SIN MARCA" ? b.marca : "", b.serie && b.serie !== "S/N" ? "Serie " + b.serie : ""].filter(Boolean).join(" · ");
+  const op = confirmado
+    ? { titulo: "Confirmar existencia", pregunta: `¿Confirmas que el bien ${inv} existe físicamente?`, btnOk: "Sí, confirmar", iconoOk: "ti-check", textoOk: "Lo paso a Confirmados…", estiloOk: "dorado" }
+    : { titulo: "Regresar a Por confirmar", pregunta: `¿Regreso el bien ${inv} a Por confirmar?`, btnOk: "Sí, regresarlo", iconoOk: "ti-arrow-back-up", textoOk: "Lo regreso a Por confirmar…" };
+  const M = window.MiniSEBISO;
+  marcando = true;
+  try {
+    const si = M && M.preguntar && !M.apagado
+      ? await M.preguntar({ ...op, detalle: desc, btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Lo dejamos como está." })
+      : confirm(op.pregunta);
+    if (!si) return;
+    const nueva = { no_inventario: inv, confirmado, cuando: new Date().toISOString(), opId: uid() };
+    try { await tx("cola", "readwrite", s => s.add(nueva)); } catch (e) { alert("No se pudo guardar en este equipo. Intenta de nuevo."); return; }
+    aplicarOp(nueva); await guardarCopia();
+    pintarGrupos(); pintar();
+    if ($("bDialogo").open && estado.abierto === b) verFicha(inv);
+    await refrescarSync(); enviarCola();
+  } finally { marcando = false; }
+}
