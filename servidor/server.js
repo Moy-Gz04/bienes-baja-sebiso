@@ -54,6 +54,8 @@ sql`CREATE TABLE IF NOT EXISTS existencias (
   .catch(e => console.error("No se pudo preparar existencias:", e.message));
 
 // Fichas escaneadas con firma: si bienes.pdf_drive_id coincide con drive_id, la ficha vigente es la firmada
+// ficha_pendiente: la ficha de Drive quedó vieja; mientras se resube, el sistema la arma al momento desde la BD
+sql`ALTER TABLE bienes ADD COLUMN IF NOT EXISTS ficha_pendiente BOOLEAN NOT NULL DEFAULT false`.catch(e => console.error("ficha_pendiente:", e.message));
 sql`CREATE TABLE IF NOT EXISTS fichas_firmadas (no_inventario TEXT PRIMARY KEY, drive_id TEXT NOT NULL)`
   .catch(e => console.error("fichas_firmadas:", e.message));
 
@@ -140,7 +142,7 @@ app.get("/api/bienes", sesion, async (req, res) => {
       fotos: b.fotos.length ? b.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${b.no_inventario}/${i + 1}?t=${tf}`),
       fotos_capturadas: !b.fotos.length && n_capturadas > 0 ? { quien: foto_captura.split("|")[0], cuando: foto_captura.split("|")[1] } : null,
       puede_capturar_fotos: !b.fotos.length, ficha: ficha_previa, filas: origen, moi: Number(b.moi) || 0,
-      tiene_pdf: !!(pdf_drive_id || pdf), pdf_en_drive: !!pdf_drive_id,
+      tiene_pdf: !!(pdf_drive_id || pdf || b.ficha_pendiente), pdf_en_drive: !!pdf_drive_id && !b.ficha_pendiente,
       clasificacion: capturado || b.clasificacion,
       estatus_capturado: capturado ? { clasificacion: capturado, quien: capturo, cuando: new Date(capturado_en).toISOString() } : null,
     }));
@@ -656,7 +658,7 @@ async function bajarImagen(url) {
   return Buffer.from(await r.arrayBuffer());
 }
 const FRONT_PUBLICO = "https://bienes-baja-sebiso.netlify.app/";
-async function generarFicha(inv) {
+async function armarFicha(inv) {
   const [b] = await sql`SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, fc.datos AS fc_datos FROM bienes b LEFT JOIN ficha_capturas fc USING (no_inventario) WHERE b.no_inventario = ${inv}`;
   if (!b) throw new Error("El bien no existe");
   const bien = { ...b, ...(b.fc_datos || {}) };
@@ -665,11 +667,14 @@ async function generarFicha(inv) {
   const fotos = origen.length
     ? await Promise.all(origen.map(o => bajarImagen(o.url).catch(e => { console.error(e.message); return null; })))
     : await Promise.all((await sql`SELECT drive_id FROM fotos_capturadas WHERE no_inventario = ${inv} ORDER BY orden`).map(f => bajarImagen(urlDrive(f.drive_id)).catch(e => { console.error(e.message); return null; })));
-  const pdf = await fichaPdf(bien, fotos);
+  return { pdf: await fichaPdf(bien, fotos), fotos };
+}
+async function generarFicha(inv) {
+  const { pdf, fotos } = await armarFicha(inv);
   const d = await appsScript({ accion: "guardarVarios", fichas: [{ no_inventario: inv, pdf_base64: pdf.toString("base64"), origen: "sistema" }] });
   const r = (d.resultados || [])[0];
   if (!r || !r.ok || !r.id) throw new Error((r && r.error) || "Drive no devolvió el id de la ficha");
-  await sql`UPDATE bienes SET pdf_drive_id = ${r.id} WHERE no_inventario = ${inv}`;
+  await sql`UPDATE bienes SET pdf_drive_id = ${r.id}, ficha_pendiente = false WHERE no_inventario = ${inv}`;
   cachePdf.set(inv, { bytes: pdf, hasta: Date.now() + 30 * 60000 });
   const archivos = fotos.map((f, i) => f && { nombre: `${inv} img ${i + 1}.jpg`, mime: f[0] === 0x89 ? "image/png" : "image/jpeg", base64: f.toString("base64") }).filter(Boolean);
   archivos.push({ nombre: `FICHA_${inv}.pdf`, mime: "application/pdf", base64: pdf.toString("base64") });
@@ -730,6 +735,15 @@ app.get("/api/ficha/:inv/pdf", async (req, res) => {
     res.send(bytes);
   };
   try {
+    const [p] = await sql`SELECT ficha_pendiente FROM bienes WHERE no_inventario = ${t.inv}`;
+    if (p && p.ficha_pendiente) {   // aún no se resube a Drive: se arma al momento con los datos vigentes
+      const c = cachePdf.get(t.inv);
+      if (c && c.hasta > Date.now()) return enviar(c.bytes);
+      const { pdf } = await armarFicha(t.inv);
+      if (cachePdf.size > 150) cachePdf.delete(cachePdf.keys().next().value);
+      cachePdf.set(t.inv, { bytes: pdf, hasta: Date.now() + 10 * 60000 });
+      return enviar(pdf);
+    }
     enviar(await pdfDeDrive(t.inv));
   } catch (e) {
     // En local, mientras se suben a Drive: el PDF generado en public/p o public/q
