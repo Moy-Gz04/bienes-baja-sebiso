@@ -43,9 +43,8 @@ function pintar() {
     // Cada sección: primero su personal y al final sus vacantes; "Agregar vacante" va al cierre del área
     const bloques = [...secs].map(([sec, ps]) => [sec, [...ps.filter(p => !p.vacante), ...ps.filter(p => p.vacante)], false]).filter(([, ps]) => ps.length);
     if (bloques.length) bloques[bloques.length - 1][2] = true; else bloques.push([area, [], true]);
-    return `<section class="rg-area"><header><h2>${esc(area)}</h2><span>${total.length} personas · ${total.reduce((a, p) => a + p.bienes.length, 0)} bienes</span></header>
-      <p class="rg-conteo">${textoConteo(conteo(total))}</p>
-      ${bloques.map(([sec, ps, esVac]) => `<div class="rg-seccion">${bloques.length > 1 || sec.toUpperCase() !== area.toUpperCase() ? `<h3 class="rg-sec-t">${esc(sec)} <small>${ps.length}</small></h3>` : ""}
+    return `<section class="rg-area"><header><h2>${esc(area)}</h2></header>
+      ${bloques.map(([sec, ps, esVac]) => `<div class="rg-seccion">${bloques.length > 1 || sec.toUpperCase() !== area.toUpperCase() ? `<h3 class="rg-sec-t">${esc(sec)}</h3>` : ""}
         <div class="rg-grid">${ps.map(tarjeta).join("")}${esVac ? `<button type="button" class="rg-agregar" data-agregar="${esc(area)}"><i class="bi bi-plus-lg"></i><span>Agregar vacante</span></button>` : ""}</div></div>`).join("")}</section>`;
   }).join("") : `<p class="rg-vacio">No hay personas que coincidan con la búsqueda.</p>`;
 }
@@ -60,7 +59,7 @@ function pintarAreas() {
   }).join("");
   const sel = cuenta(estado.area);
   $("rgAreaSel").textContent = estado.area || "Todas las áreas";
-  $("rgAreaCta").textContent = `${sel.length} personas · ${sel.reduce((s, p) => s + p.bienes.length, 0)} bienes`;
+  $("rgAreaCta").textContent = "";
 }
 
 // ── Trabajo sin internet ─────────────────────────────────────────────────────────────────────────
