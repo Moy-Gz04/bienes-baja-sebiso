@@ -68,7 +68,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia"], version: "existencia-2026-11-18" }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia"], version: "clasificacion-2026-11-18" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -98,7 +98,7 @@ function sesion(req, res, next) {
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
     // rol "existencia": solo consulta bienes, ve su ficha y confirma su existencia (trabaja sin internet: sesión de 30 días)
     req.soloExistencia = req.usuario.rol === "existencia";
-    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
+    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
     next();
@@ -211,6 +211,24 @@ app.post("/api/existencia", sesion, async (req, res) => {
       RETURNING quien, to_char(cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS cuando`;
     res.json({ ok: true, existencia: x });
   } catch (e) { fallo(res, e, "No se pudo guardar la confirmación."); }
+});
+
+// ── Cambiar la clasificación entre Baja definitiva y Para reaprovechamiento (rol existencia o completo).
+// Se guarda en estatus_capturas, que manda sobre bienes.clasificacion. También llega desde la cola sin internet.
+const CAMBIABLES = ["Baja definitiva", "Para reaprovechamiento"];
+app.post("/api/clasificacion", sesion, async (req, res) => {
+  if (!req.soloExistencia && req.usuario.rol !== "completo") return res.status(403).json({ ok: false, mensaje: "Tu usuario no cambia la clasificación." });
+  try {
+    const inv = String(req.body?.no_inventario || ""), valor = req.body?.clasificacion;
+    if (!CAMBIABLES.includes(valor)) return res.status(400).json({ ok: false, mensaje: "Solo se cambia entre Baja definitiva y Reaprovechamiento." });
+    const [b] = await sql`SELECT COALESCE(e.clasificacion, b.clasificacion) AS c FROM bienes b LEFT JOIN estatus_capturas e USING (no_inventario) WHERE b.no_inventario = ${inv}`;
+    if (!b) return res.status(404).json({ ok: false, mensaje: `El bien ${inv} ya no existe en el sistema.` });
+    if (!CAMBIABLES.includes(b.c)) return res.status(409).json({ ok: false, mensaje: `El bien ${inv} está en ${b.c}; solo se cambian Baja definitiva y Reaprovechamiento.` });
+    const [e] = await sql`INSERT INTO estatus_capturas (no_inventario, clasificacion, quien) VALUES (${inv}, ${valor}, ${req.usuario.usuario || "—"})
+      ON CONFLICT (no_inventario) DO UPDATE SET clasificacion = EXCLUDED.clasificacion, quien = EXCLUDED.quien, cuando = now()
+      RETURNING clasificacion, quien`;
+    res.json({ ok: true, clasificacion: e.clasificacion });
+  } catch (e) { fallo(res, e, "No se pudo cambiar la clasificación."); }
 });
 
 // ── Captura de las 3 fotos de un bien que no tenía (desde el celular). Se pueden volver a tomar.

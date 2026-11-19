@@ -267,7 +267,7 @@ function verFicha(inv) {
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
   $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
-  if (SOLO_EXISTENCIA) { $("bDescargar").hidden = true; pintarBotonExistencia(b); }
+  if (SOLO_EXISTENCIA) { $("bDescargar").hidden = true; pintarBotonExistencia(b); pintarBotonClas(b); }
   $("bCompletar").hidden = SOLO_CAPTURA || SOLO_COMPROBAR || SOLO_EXISTENCIA;
   if (b.ficha_generando && b.ficha_generando.estado === "generando") vigilarFicha(b);
   $("bCaptura").hidden = !b.pendiente;
@@ -420,6 +420,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-cabeza h1").textContent = "Confirmación de existencia";
     document.querySelector(".b-comp-th").textContent = "Existencia";
     $("bExistencia").addEventListener("click", () => estado.abierto && marcarExistencia(estado.abierto.no_inventario));
+    $("bCambiarClas").addEventListener("click", () => estado.abierto && cambiarClasificacion(estado.abierto.no_inventario));
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
   if (respuesta.rol === "comprobar") {
@@ -533,6 +534,7 @@ const yo = () => { try { return JSON.parse(atob(localStorage.getItem("token").sp
 const horaLocal = (iso) => { const d = new Date(iso), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 function aplicarOp(op) {
   const b = BIENES.find(x => x.no_inventario === op.no_inventario); if (!b) return;
+  if (op.tipo === "clasif") { b.clasificacion_bien = op.clasificacion; return; }
   b.existencia = op.confirmado ? { quien: yo(), cuando: horaLocal(op.cuando) } : null;
   b.clasificacion = b.existencia ? "Confirmados" : "Por confirmar";
 }
@@ -574,7 +576,7 @@ function pintarSync() {
   const el = $("bSync"); if (!el) return;
   const off = sinRed(), n = sync.pend, r = sync.rech;
   let cls = "", html = "";
-  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
+  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)}${x.tipo === "clasif" ? " (cambio a " + esc(corta(x.clasificacion)) + ")" : ""} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
   else if (sync.sesion && n) { cls = "mal"; html = `<div><b><i class="bi bi-person-lock"></i> Tu sesión venció.</b> Tus ${n} cambios siguen guardados en este equipo; inicia sesión de nuevo y se subirán solos.</div><button type="button" class="tv-btn" id="bSyncSesion">Iniciar sesión</button>`; }
   else if (off) { cls = "off"; html = `<div><b><i class="bi bi-wifi-off"></i> Sin internet.</b> Puedes seguir confirmando${n ? `; hay ${n} ${n === 1 ? "cambio guardado" : "cambios guardados"} en este equipo` : ""} y se subirán solos cuando vuelva.</div>`; }
   else if (n) { cls = "env"; html = `<div><b><i class="bi bi-cloud-arrow-up"></i> Subiendo ${n} ${n === 1 ? "cambio" : "cambios"}…</b> Están guardados en este equipo.</div>`; }
@@ -593,7 +595,7 @@ async function enviarCola() {
       const op = (await tx("cola", "readonly", s => s.getAll()))[0]; if (!op) break;
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
       let r;
-      try { r = await fetch("/api/existencia", { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify({ no_inventario: op.no_inventario, confirmado: op.confirmado, cuando: op.cuando, opId: op.opId }) }); }
+      try { r = await fetch(op.tipo === "clasif" ? "/api/clasificacion" : "/api/existencia", { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify(op.tipo === "clasif" ? { no_inventario: op.no_inventario, clasificacion: op.clasificacion, opId: op.opId } : { no_inventario: op.no_inventario, confirmado: op.confirmado, cuando: op.cuando, opId: op.opId }) }); }
       catch (e) { sync.sinRed = true; break; } finally { clearTimeout(t); }
       if (r.status === 401) { sync.sesion = true; break; }
       if (r.status >= 500 || !(r.ok || permanente(r.status))) { sync.sinRed = true; break; }   // servidor dormido o saturado: se reintenta
@@ -632,6 +634,31 @@ function pintarBotonExistencia(b) {
   const x = $("bExistencia"); x.hidden = false;
   x.className = "tv-btn b-exist-dlg" + (b.existencia ? " reg" : " tv-btn-principal");
   x.innerHTML = b.existencia ? `<i class="bi bi-arrow-counterclockwise"></i> Regresar a Por confirmar` : `<i class="bi bi-check2-circle"></i> Confirmar existencia`;
+}
+// ── Cambiar entre Baja definitiva y Reaprovechamiento (con Mini SEBISO; también sin internet)
+const OTRA_CLAS = { "Baja definitiva": "Para reaprovechamiento", "Para reaprovechamiento": "Baja definitiva" };
+const corta = (c) => c === "Para reaprovechamiento" ? "Reaprovechamiento" : c;
+function pintarBotonClas(b) {
+  const x = $("bCambiarClas"), otra = OTRA_CLAS[b.clasificacion_bien];
+  x.hidden = !otra; if (!otra) return;
+  x.innerHTML = `<i class="bi bi-arrow-left-right"></i> Cambiar a ${corta(otra)}`;
+}
+async function cambiarClasificacion(inv) {
+  const b = BIENES.find(x => x.no_inventario === inv), otra = b && OTRA_CLAS[b.clasificacion_bien]; if (!otra || marcando) return;
+  const M = window.MiniSEBISO, pregunta = `¿Cambio el bien ${inv} de ${corta(b.clasificacion_bien)} a ${corta(otra)}?`;
+  marcando = true;
+  try {
+    const si = M && M.preguntar && !M.apagado
+      ? await M.preguntar({ titulo: "Cambiar estatus", pregunta, detalle: b.descripcion || "", btnOk: "Sí, cambiarlo", iconoOk: "ti-arrows-exchange", textoOk: `Lo paso a ${corta(otra)}…`, estiloOk: "dorado", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Lo dejamos como está." })
+      : confirm(pregunta);
+    if (!si) return;
+    const nueva = { tipo: "clasif", no_inventario: inv, clasificacion: otra, cuando: new Date().toISOString(), opId: uid() };
+    try { await tx("cola", "readwrite", s => s.add(nueva)); } catch (e) { alert("No se pudo guardar en este equipo. Intenta de nuevo."); return; }
+    aplicarOp(nueva); await guardarCopia();
+    pintar();
+    if ($("bDialogo").open && estado.abierto === b) verFicha(inv);
+    await refrescarSync(); enviarCola();
+  } finally { marcando = false; }
 }
 let marcando = false;
 async function marcarExistencia(inv) {
