@@ -107,21 +107,22 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) cargar(); });
   cargar();
   setInterval(cargar, 4000);
-})();
 
-// ── Ficha técnica: firmada (escaneada), del sistema (sin firma) o generándose
-function fichaCelda(d) {
-  if (!d.tiene_ficha || d.ficha_generando) return `<span class="mo-ficha-gen"><i class="bi bi-hourglass-split"></i> Generando…</span>`;
-  const firma = d.firmada ? `<span class="mo-firma ok"><i class="bi bi-pen-fill"></i> Firmada</span>` : `<span class="mo-firma"><i class="bi bi-file-earmark"></i> Sin firma</span>`;
-  return `<button type="button" class="mo-ficha" data-ficha="${esc(d.no_inventario)}" aria-label="Ver ficha técnica del ${esc(d.no_inventario)}"><i class="bi bi-file-earmark-pdf"></i> Ver ficha</button>${firma}`;
-}
-document.addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-ficha]"); if (!b) return;
-  const v = window.open("about:blank", "_blank"); b.disabled = true;
-  try {
-    const r = await fetch(`/api/ficha/${encodeURIComponent(b.dataset.ficha)}/enlace`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
-    const j = await r.json(); if (!j.ok) throw new Error(j.mensaje);
-    if (v) v.location = j.url; else location.href = j.url;
-  } catch (err) { if (v) v.close(); alert("No se pudo abrir la ficha: " + (err.message || "intenta de nuevo")); }
-  finally { b.disabled = false; }
-});
+
+  // ── Ficha técnica: firmada (escaneada), del sistema (sin firma) o generándose
+  function fichaCelda(d) {
+    if (!d.tiene_ficha || d.ficha_generando) return `<span class="mo-ficha-gen"><i class="bi bi-hourglass-split"></i> Generando…</span>`;
+    const firma = d.firmada ? `<span class="mo-firma ok"><i class="bi bi-pen-fill"></i> Firmada</span>` : `<span class="mo-firma"><i class="bi bi-file-earmark"></i> Sin firma</span>`;
+    return `<button type="button" class="mo-ficha" data-ficha="${esc(d.no_inventario)}" aria-label="Ver ficha técnica del ${esc(d.no_inventario)}"><i class="bi bi-file-earmark-pdf"></i> Ver ficha</button>${firma}`;
+  }
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-ficha]"); if (!b) return;
+    const v = window.open("about:blank", "_blank"); b.disabled = true;
+    try {
+      const r = await fetch(`/api/ficha/${encodeURIComponent(b.dataset.ficha)}/enlace`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+      const j = await r.json(); if (!j.ok) throw new Error(j.mensaje);
+      if (v) v.location = j.url; else location.href = j.url;
+    } catch (err) { if (v) v.close(); alert("No se pudo abrir la ficha: " + (err.message || "intenta de nuevo")); }
+    finally { b.disabled = false; }
+  });
+})();
