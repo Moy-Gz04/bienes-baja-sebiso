@@ -675,7 +675,7 @@ async function generarFicha(inv) {
   const r = (d.resultados || [])[0];
   if (!r || !r.ok || !r.id) throw new Error((r && r.error) || "Drive no devolvió el id de la ficha");
   await sql`UPDATE bienes SET pdf_drive_id = ${r.id}, ficha_pendiente = false WHERE no_inventario = ${inv}`;
-  cachePdf.set(inv, { bytes: pdf, hasta: Date.now() + 30 * 60000 });
+  cachePdf.set(inv, { id: r.id, bytes: pdf, hasta: Date.now() + 30 * 60000 });
   const archivos = fotos.map((f, i) => f && { nombre: `${inv} img ${i + 1}.jpg`, mime: f[0] === 0x89 ? "image/png" : "image/jpeg", base64: f.toString("base64") }).filter(Boolean);
   archivos.push({ nombre: `FICHA_${inv}.pdf`, mime: "application/pdf", base64: pdf.toString("base64") });
   await appsScript({ accion: "guardarCarpeta", inventario: inv, archivos });
@@ -700,9 +700,17 @@ app.get("/api/ficha/:inv/enlace", sesion, (req, res) => {
 });
 
 const cachePdf = new Map();   // inv -> { bytes, hasta }
-async function pdfDeDrive(inv) {
+async function pdfDeDrive(inv, id) {
   const c = cachePdf.get(inv);
-  if (c && c.hasta > Date.now()) return c.bytes;
+  if (c && c.hasta > Date.now() && (!id || c.id === id)) return c.bytes;   // la caché vale solo para la versión vigente
+  if (id) try {
+    const bytes = await bajarDrive(id);
+    if (bytes.slice(0, 5).toString() === "%PDF-") {
+      if (cachePdf.size > 150) cachePdf.delete(cachePdf.keys().next().value);
+      cachePdf.set(inv, { id, bytes, hasta: Date.now() + 30 * 60000 });
+      return bytes;
+    }
+  } catch (e) { console.error("Ficha por id", inv, e.message); }
   if (!process.env.APPS_SCRIPT_FICHAS_URL) throw new Error("Falta APPS_SCRIPT_FICHAS_URL");
   let ultimo;
   for (let intento = 1; intento <= 3; intento++) {
@@ -715,7 +723,7 @@ async function pdfDeDrive(inv) {
       if (!d.ok) { const e = new Error(d.error || "Drive no devolvió la ficha"); e.definitivo = /no tiene ficha/.test(d.error || ""); throw e; }
       const bytes = Buffer.from(d.pdf_base64, "base64");
       if (cachePdf.size > 150) cachePdf.delete(cachePdf.keys().next().value);
-      cachePdf.set(inv, { bytes, hasta: Date.now() + 30 * 60000 });
+      cachePdf.set(inv, { id, bytes, hasta: Date.now() + 30 * 60000 });
       return bytes;
     } catch (e) {
       ultimo = e;
@@ -731,11 +739,11 @@ app.get("/api/ficha/:inv/pdf", async (req, res) => {
   try { t = jwt.verify(String(req.query.t || ""), SECRETO); } catch (e) { return res.status(401).send("El enlace de la ficha venció. Vuelve a abrirla desde el sistema."); }
   if (t.proposito !== "ficha" || t.inv !== req.params.inv) return res.status(401).send("Enlace no válido.");
   const enviar = (bytes) => {
-    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="FICHA_${t.inv}.pdf"`, "Cache-Control": "private, max-age=300" });
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="FICHA_${t.inv}.pdf"`, "Cache-Control": "no-store" });
     res.send(bytes);
   };
   try {
-    const [p] = await sql`SELECT ficha_pendiente FROM bienes WHERE no_inventario = ${t.inv}`;
+    const [p] = await sql`SELECT ficha_pendiente, pdf_drive_id FROM bienes WHERE no_inventario = ${t.inv}`;
     if (p && p.ficha_pendiente) {   // aún no se resube a Drive: se arma al momento con los datos vigentes
       const c = cachePdf.get(t.inv);
       if (c && c.hasta > Date.now()) return enviar(c.bytes);
@@ -744,7 +752,7 @@ app.get("/api/ficha/:inv/pdf", async (req, res) => {
       cachePdf.set(t.inv, { bytes: pdf, hasta: Date.now() + 10 * 60000 });
       return enviar(pdf);
     }
-    enviar(await pdfDeDrive(t.inv));
+    enviar(await pdfDeDrive(t.inv, p && p.pdf_drive_id));
   } catch (e) {
     // En local, mientras se suben a Drive: el PDF generado en public/p o public/q
     if (fs.existsSync(FRONT)) {
