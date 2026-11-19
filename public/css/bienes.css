@@ -364,3 +364,33 @@ body.solo-existencia .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
 .b-cap-gal:hover{ background:var(--g); color:#fff; }
 .b-cap-gal:focus-visible{ outline:2px solid var(--g); outline-offset:1px; }
 @media (max-width:900px){ .b-cap-gal{ padding:6px 9px; font-size:11px; } }
+
+/* ── Ajustes de celular (usuario Existencias y casillas de fotos) ── */
+.b-campos select{ min-width:0; width:100%; padding:6px 9px; border:1.5px solid var(--borde); border-radius:9px; background:#fff; color:var(--txt); font:500 12.5px 'Montserrat',sans-serif; text-transform:none; letter-spacing:0; }
+.b-campos select:focus{ outline:0; border-color:var(--g); box-shadow:0 0 0 3px rgba(95,33,50,.1); }
+#bNuevoCampos{ scrollbar-width:none; } #bNuevoCampos::-webkit-scrollbar{ display:none; }
+/* Galería: barra al pie de la casilla, sin tapar el número ni el ícono */
+.b-capcasillas label{ padding-bottom:36px; }
+.b-cap-gal{ position:absolute; top:auto; bottom:6px; left:6px; right:6px; justify-content:center; }
+.b-capcasillas label.lista span{ bottom:auto; top:6px; left:34px; right:6px; }
+@media (max-width:900px){
+  .b-capcasillas label{ aspect-ratio:auto; min-height:128px; gap:2px; }
+  .b-capcasillas label small{ display:none; }
+  .b-cap-gal{ padding:7px 4px; font-size:11.5px; }
+  /* apartados en 2 x 2, sin cortar el texto */
+  body.solo-existencia .b-grupos{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:6px; }
+  body.solo-existencia .b-grupo{ flex-direction:row !important; align-items:center; justify-content:space-between; padding:8px 12px 8px 14px !important; }
+  body.solo-existencia .b-grupo span{ font-size:11.5px !important; white-space:nowrap; }
+  body.solo-existencia .b-grupo b{ font-size:17px; }
+  /* ficha: Confirmar a todo lo ancho arriba; luego flechas, ficha técnica y cerrar */
+  body.solo-existencia .b-acciones{ display:grid; grid-template-columns:44px 44px 1fr; gap:8px; }
+  body.solo-existencia .b-acciones #bExistencia{ grid-column:1 / -1; order:-2; padding:12px; font-size:14px; }
+  body.solo-existencia .b-acciones #bCambiarClas{ grid-column:1 / -1; order:-1; }
+  body.solo-existencia .b-acciones #bAnteriorBien, body.solo-existencia .b-acciones #bSiguienteBien{ padding:0; height:40px; }
+  body.solo-existencia .b-acciones #bImprimir{ grid-column:3; }
+  body.solo-existencia .b-acciones > button:last-child{ grid-column:1 / -1; }
+  /* encabezado: título y botón Registrar sin amontonarse */
+  body.solo-existencia .tv-cabeza{ align-items:flex-start; gap:10px; }
+  body.solo-existencia .tv-cabeza h1{ font-size:19px; line-height:1.15; }
+  body.solo-existencia #bNuevo{ flex:none; white-space:nowrap; }
+}
