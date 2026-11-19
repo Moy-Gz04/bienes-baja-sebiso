@@ -4,7 +4,7 @@ const estado = { grupo: "", abierto: null, foto: 0, vista: [] };
 let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
 const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
 let SOLO_EXISTENCIA = false; // usuario que solo consulta y confirma la existencia física (funciona sin internet)
-const GRUPOS_EXISTENCIA = [["", "Todos"], ["Por confirmar", "Por confirmar"], ["Confirmados", "Confirmados"]];
+const GRUPOS_EXISTENCIA = [["", "Todos"], ["Por confirmar", "Por confirmar"], ["Confirmados", "Confirmados"], ["__nuevos", "Registrados"]];
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
@@ -17,7 +17,7 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja", "Por confirmar": "dif", "Confirmados": "reap" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja", "Por confirmar": "dif", "Confirmados": "reap", "__nuevos": "capt" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
 // Datos que se revisan para el apartado "Capturar datos"
 const DATOS_CLAVE = [["marca", "marca"], ["modelo", "modelo"], ["serie", "serie"], ["material", "material"], ["color", "color"], ["adscripcion", "adscripción"],
@@ -29,7 +29,7 @@ function faltantes(b) {
   return f;
 }
 const porCapturar = (b) => { if (b.captura_omitida || b.fotos.length) return false; const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
-const enGrupoDe = (b, g) => !g || (g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
+const enGrupoDe = (b, g) => !g || (g === "__nuevos" ? !!b.nuevo : g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
 
 function filtrados() {
   const terminos = norm($("bBuscar").value).split(/\s+/).filter(Boolean);
@@ -131,7 +131,8 @@ const valor = (b, c) => (typeof c === "function" ? c(b) : b[c]) || "";
 const DATOS_EXISTENCIA = [["No. inventario", "no_inventario"], ["Clave armonizada", "clave_armonizada"], ["COG", "cog"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"],
   ["Material", "material"], ["Color", "color"], ["Ubicación", (b) => b.ubicacion || b.edificio], ["M.O.I.", (b) => pesos(b.moi)], ["Fecha de adquisición", (b) => fecha(b.fecha_adquisicion)],
   ["Estado físico", (b) => estadoDe(b)], ["Clasificación", "clasificacion_bien"], ["Existencia", (b) => b.existencia ? "Confirmada · " + b.existencia.quien + " · " + b.existencia.cuando : "Por confirmar"],
-  ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"], ["Folio fiscal", "folio_fiscal", 3]];
+  ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"], ["Folio fiscal", "folio_fiscal"],
+  ["Registrado en el sistema", (b) => b.nuevo ? [b.registrado_por || yo(), b.registrado_en ? horaLocal(b.registrado_en) : ""].filter(Boolean).join(" · ") : "", 2]];
 const DATOS_CAPTURA = [["No. inventario", "no_inventario"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"], ["Material", "material"], ["Color", "color"],
   ["Ubicación", (b) => b.ubicacion || b.edificio, 3], ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"]];
 
@@ -420,6 +421,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-cabeza h1").textContent = "Confirmación de existencia";
     document.querySelector(".b-comp-th").textContent = "Existencia";
     $("bExistencia").addEventListener("click", () => estado.abierto && marcarExistencia(estado.abierto.no_inventario));
+    $("bNuevo").hidden = false;
+    $("bNuevo").addEventListener("click", abrirNuevo);
+    $("bNuevoForm").addEventListener("submit", guardarNuevo);
+    $("bNuevoCasillas").addEventListener("change", async (e) => {
+      const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";
+      if (!archivo) return;
+      $("bNuevoMsg").textContent = "Preparando foto…";
+      try { nuevoFotos[i] = await reducir(archivo); $("bNuevoMsg").textContent = ""; } catch (x) { $("bNuevoMsg").textContent = "Esa foto no se pudo leer. Tómala otra vez."; }
+      pintarNuevoFotos();
+    });
+    $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     $("bCambiarClas").addEventListener("click", () => estado.abierto && cambiarClasificacion(estado.abierto.no_inventario));
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
@@ -533,6 +545,7 @@ const sinRed = () => !navigator.onLine || sync.sinRed;
 const yo = () => { try { return JSON.parse(atob(localStorage.getItem("token").split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).usuario || "—"; } catch (e) { return "—"; } };
 const horaLocal = (iso) => { const d = new Date(iso), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 function aplicarOp(op) {
+  if (op.tipo === "nuevo") { agregarNuevoLocal(op); return; }
   const b = BIENES.find(x => x.no_inventario === op.no_inventario); if (!b) return;
   if (op.tipo === "clasif") { b.clasificacion_bien = op.clasificacion; return; }
   b.existencia = op.confirmado ? { quien: yo(), cuando: horaLocal(op.cuando) } : null;
@@ -576,7 +589,7 @@ function pintarSync() {
   const el = $("bSync"); if (!el) return;
   const off = sinRed(), n = sync.pend, r = sync.rech;
   let cls = "", html = "";
-  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)}${x.tipo === "clasif" ? " (cambio a " + esc(corta(x.clasificacion)) + ")" : ""} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
+  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)}${x.tipo === "clasif" ? " (cambio a " + esc(corta(x.clasificacion)) + ")" : x.tipo === "nuevo" ? " (registro nuevo)" : ""} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
   else if (sync.sesion && n) { cls = "mal"; html = `<div><b><i class="bi bi-person-lock"></i> Tu sesión venció.</b> Tus ${n} cambios siguen guardados en este equipo; inicia sesión de nuevo y se subirán solos.</div><button type="button" class="tv-btn" id="bSyncSesion">Iniciar sesión</button>`; }
   else if (off) { cls = "off"; html = `<div><b><i class="bi bi-wifi-off"></i> Sin internet.</b> Puedes seguir confirmando${n ? `; hay ${n} ${n === 1 ? "cambio guardado" : "cambios guardados"} en este equipo` : ""} y se subirán solos cuando vuelva.</div>`; }
   else if (n) { cls = "env"; html = `<div><b><i class="bi bi-cloud-arrow-up"></i> Subiendo ${n} ${n === 1 ? "cambio" : "cambios"}…</b> Están guardados en este equipo.</div>`; }
@@ -593,9 +606,9 @@ async function enviarCola() {
   try {
     for (;;) {
       const op = (await tx("cola", "readonly", s => s.getAll()))[0]; if (!op) break;
-      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), op.tipo === "nuevo" ? 150000 : 45000);
       let r;
-      try { r = await fetch(op.tipo === "clasif" ? "/api/clasificacion" : "/api/existencia", { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify(op.tipo === "clasif" ? { no_inventario: op.no_inventario, clasificacion: op.clasificacion, opId: op.opId } : { no_inventario: op.no_inventario, confirmado: op.confirmado, cuando: op.cuando, opId: op.opId }) }); }
+      try { r = await fetch(op.tipo === "nuevo" ? "/api/nuevo" : op.tipo === "clasif" ? "/api/clasificacion" : "/api/existencia", { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + localStorage.getItem("token"), "Content-Type": "application/json" }, body: JSON.stringify(op.tipo === "nuevo" ? { datos: op.datos, fotos: op.fotos, opId: op.opId } : op.tipo === "clasif" ? { no_inventario: op.no_inventario, clasificacion: op.clasificacion, opId: op.opId } : { no_inventario: op.no_inventario, confirmado: op.confirmado, cuando: op.cuando, opId: op.opId }) }); }
       catch (e) { sync.sinRed = true; break; } finally { clearTimeout(t); }
       if (r.status === 401) { sync.sesion = true; break; }
       if (r.status >= 500 || !(r.ok || permanente(r.status))) { sync.sinRed = true; break; }   // servidor dormido o saturado: se reintenta
@@ -659,6 +672,53 @@ async function cambiarClasificacion(inv) {
     if ($("bDialogo").open && estado.abierto === b) verFicha(inv);
     await refrescarSync(); enviarCola();
   } finally { marcando = false; }
+}
+// ── Registrar un bien nuevo (fotos opcionales). Se guarda primero en la cola: funciona sin internet.
+let nuevoFotos = [null, null, null];
+function pintarNuevoFotos() {
+  [...$("bNuevoCasillas").children].forEach((c, i) => {
+    const f = nuevoFotos[i]; c.classList.toggle("lista", !!f);
+    c.querySelector("img").src = f || ""; c.querySelector("img").hidden = !f;
+    c.querySelector("span").textContent = f ? `${TOMAS[i]} ✓` : TOMAS[i];
+  });
+}
+function abrirNuevo() {
+  $("bNuevoForm").reset(); nuevoFotos = [null, null, null]; pintarNuevoFotos();
+  $("bNuevoCampos").querySelectorAll("input[required]").forEach(i => i.closest("label").classList.add("falta"));
+  $("bNuevoMsg").textContent = ""; $("bNuevoGuardar").disabled = false;
+  abrir($("bNuevoDlg"));
+  setTimeout(() => $("bNuevoForm").no_inventario.focus(), 50);
+}
+function agregarNuevoLocal(op) {
+  const d = op.datos;
+  if (BIENES.some(x => x.no_inventario === d.no_inventario)) return;
+  const b = { ...d, moi: 0, nuevo: true, registrado_en: op.cuando, clasificacion_bien: d.clasificacion, fotos: (op.fotos || []).filter(Boolean),
+    existencia: { quien: yo(), cuando: horaLocal(op.cuando) }, clasificacion: "Confirmados", tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] };
+  b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.adscripcion, b.unidad_presupuestal, b.ubicacion, b.material, b.color, b.caracteristicas].join(" "));
+  BIENES.push(b);
+}
+async function guardarNuevo(e) {
+  e.preventDefault();
+  const f = $("bNuevoForm"), datos = {};
+  [...f.elements].forEach(el => { if (el.name && el.type !== "file") datos[el.name] = el.value.trim(); });
+  datos.no_inventario = datos.no_inventario.replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(datos.no_inventario)) { $("bNuevoMsg").textContent = "Escribe el No. de inventario."; f.no_inventario.focus(); return; }
+  if (!datos.descripcion) { $("bNuevoMsg").textContent = "Falta la descripción."; f.descripcion.focus(); return; }
+  if (BIENES.some(x => x.no_inventario === datos.no_inventario)) { $("bNuevoMsg").textContent = `El No. ${datos.no_inventario} ya está en la lista.`; f.no_inventario.focus(); return; }
+  const n = nuevoFotos.filter(Boolean).length;
+  const M = window.MiniSEBISO, pregunta = `¿Registro el bien ${datos.no_inventario}?`;
+  const detalle = `${datos.descripcion} · ${n ? n + (n === 1 ? " foto" : " fotos") : "sin fotos"} · ${datos.clasificacion === "Para reaprovechamiento" ? "Reaprovechamiento" : "Baja definitiva"}`;
+  const si = M && M.preguntar && !M.apagado
+    ? await M.preguntar({ titulo: "Registrar bien", pregunta, detalle, btnOk: "Sí, registrarlo", iconoOk: "ti-plus", textoOk: "Lo registro…", estiloOk: "dorado", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Sigue editando." })
+    : confirm(pregunta);
+  if (!si) return;
+  $("bNuevoGuardar").disabled = true;
+  const op = { tipo: "nuevo", no_inventario: datos.no_inventario, datos, fotos: nuevoFotos.filter(Boolean), cuando: new Date().toISOString(), opId: uid() };
+  try { await tx("cola", "readwrite", s => s.add(op)); } catch (x) { $("bNuevoMsg").textContent = "No se pudo guardar en este equipo. Intenta de nuevo."; $("bNuevoGuardar").disabled = false; return; }
+  agregarNuevoLocal(op); await guardarCopia();
+  cerrar($("bNuevoDlg"));
+  estado.grupo = "__nuevos"; pintarGrupos(); pintar();
+  await refrescarSync(); enviarCola();
 }
 let marcando = false;
 async function marcarExistencia(inv) {

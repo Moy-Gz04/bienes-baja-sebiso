@@ -351,3 +351,11 @@ body.solo-existencia .b-grupos{ grid-template-columns:repeat(3,minmax(0,1fr)); }
   body.solo-existencia .b-grupo b{ font-size:18px; }
   body.solo-existencia .b-grupo small{ display:none; }
 }
+
+/* registro de bien nuevo */
+.b-nuevo-fotos{ padding:0 16px 8px; }
+.b-nuevo-fotos > p{ margin:4px 0 6px; font-size:10px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--txt2); }
+.b-campos select{ font:inherit; text-transform:none; letter-spacing:0; }
+body.solo-existencia .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+@media (max-width:900px){ body.solo-existencia .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; } body.solo-existencia .b-grupo{ padding:6px 7px 6px 9px; } body.solo-existencia .b-grupo span{ font-size:10px; } }
+@media (max-width:760px){ #bNuevo{ padding:8px 12px; } body.solo-existencia .b-cabeza-der{ display:flex !important; } }

@@ -167,7 +167,8 @@ function msJunto(c, W, H) {
           </div>
         </div>
       </div>`;
-    document.body.appendChild(overlay);
+    // si hay una ventana modal abierta (capa superior), el diálogo va dentro de ella para quedar al frente
+    ([...document.querySelectorAll('dialog[open]')].pop() || document.body).appendChild(overlay);
     const mascota = overlay.querySelector('.ms-dlg-mascota');
     const globo = overlay.querySelector('.ms-dlg-globo');
     const ojos = mascota.querySelectorAll('.ms-ojo-mov');

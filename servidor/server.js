@@ -30,7 +30,7 @@ app.disable("x-powered-by");
 app.set("trust proxy", 1);
 // las fotos capturadas desde el celular llegan en un cuerpo grande; lo demás, pequeño
 const jsonChico = express.json({ limit: "100kb" }), jsonFotos = express.json({ limit: "15mb" });
-app.use((req, res, next) => (/^\/api\/(bienes\/[^/]+\/fotos|mudanza|resguardos\/\d+\/foto)$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
+app.use((req, res, next) => (/^\/api\/(bienes\/[^/]+\/fotos|mudanza|resguardos\/\d+\/foto|nuevo)$/.test(req.path) ? jsonFotos : jsonChico)(req, res, next));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 // Fotos tomadas en el sistema para los bienes que no tenían (3 por bien): el archivo vive en Drive, aquí solo su id
@@ -43,6 +43,10 @@ sql`CREATE TABLE IF NOT EXISTS fotos_capturadas (
 sql`CREATE TABLE IF NOT EXISTS comprobaciones (
   no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, valor BOOLEAN NOT NULL, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar comprobaciones:", e.message));
+
+// Bienes dados de alta desde el sistema (rol existencia): quién, cuándo y el id de la operación (para no duplicar reintentos)
+sql`ALTER TABLE bienes ADD COLUMN IF NOT EXISTS registrado_por TEXT, ADD COLUMN IF NOT EXISTS registrado_en TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS registro_op TEXT`
+  .catch(e => console.error("registro:", e.message));
 
 // Confirmación de existencia física (rol "existencia"): si hay fila, el bien está confirmado
 sql`CREATE TABLE IF NOT EXISTS existencias (
@@ -68,7 +72,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia"], version: "clasificacion-2026-11-18" }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia"], version: "nuevo-2026-11-19" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -98,7 +102,7 @@ function sesion(req, res, next) {
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
     // rol "existencia": solo consulta bienes, ve su ficha y confirma su existencia (trabaja sin internet: sesión de 30 días)
     req.soloExistencia = req.usuario.rol === "existencia";
-    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
+    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
     next();
@@ -136,11 +140,11 @@ app.get("/api/bienes", sesion, async (req, res) => {
     }));
     if (req.soloExistencia) {
       const CAMPOS = ["no_inventario", "descripcion", "marca", "modelo", "serie", "material", "color", "ubicacion", "edificio", "unidad_presupuestal", "adscripcion", "organo_superior",
-        "clave_armonizada", "cog", "moi", "fecha_adquisicion", "estado_fisico", "estado_ficha", "condicion_foto", "caracteristicas", "folio_fiscal", "propuesta_dif", "fotos", "tiene_pdf", "ficha", "clasificacion"];
+        "clave_armonizada", "cog", "moi", "fecha_adquisicion", "estado_fisico", "estado_ficha", "condicion_foto", "caracteristicas", "folio_fiscal", "propuesta_dif", "fotos", "tiene_pdf", "ficha", "clasificacion", "registrado_por"];
       return res.json({ ok: true, rol: "existencia", bienes: bienes.map(b => {
         const x = Object.fromEntries(CAMPOS.map(k => [k, b[k]]));
         const [quien, cuando] = b.existencia ? b.existencia.split("|") : [];
-        return { ...x, clasificacion_bien: b.clasificacion, existencia: b.existencia ? { quien, cuando } : null, clasificacion: b.existencia ? "Confirmados" : "Por confirmar", puede_capturar_fotos: false, avisos: [], filas: [] };
+        return { ...x, nuevo: !!b.registrado_por, registrado_en: b.registrado_en ? new Date(b.registrado_en).toISOString() : null, clasificacion_bien: b.clasificacion, existencia: b.existencia ? { quien, cuando } : null, clasificacion: b.existencia ? "Confirmados" : "Por confirmar", puede_capturar_fotos: false, avisos: [], filas: [] };
       }) });
     }
     if (req.soloComprobar) {
@@ -229,6 +233,36 @@ app.post("/api/clasificacion", sesion, async (req, res) => {
       RETURNING clasificacion, quien`;
     res.json({ ok: true, clasificacion: e.clasificacion });
   } catch (e) { fallo(res, e, "No se pudo cambiar la clasificación."); }
+});
+
+// ── Registrar un bien nuevo (rol existencia). Fotos opcionales (0 a 3). Queda con su existencia confirmada.
+// Llega también desde la cola sin internet: si ya existe con el mismo opId se responde ok (reintento).
+app.post("/api/nuevo", sesion, async (req, res) => {
+  if (!req.soloExistencia && req.usuario.rol !== "completo") return res.status(403).json({ ok: false, mensaje: "Tu usuario no registra bienes." });
+  try {
+    const d = req.body?.datos || {}, opId = String(req.body?.opId || "").slice(0, 80);
+    const t = (k, max = 300) => String(d[k] ?? "").trim().slice(0, max) || null;
+    const inv = String(d.no_inventario || "").trim().replace(/\s+/g, "");
+    if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(inv)) return res.status(400).json({ ok: false, mensaje: "Escribe un No. de inventario válido." });
+    if (!t("descripcion")) return res.status(400).json({ ok: false, mensaje: "Falta la descripción." });
+    const clas = CAMBIABLES.includes(d.clasificacion) ? d.clasificacion : "Baja definitiva";
+    const [ya] = await sql`SELECT registro_op FROM bienes WHERE no_inventario = ${inv}`;
+    if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. de inventario ${inv} ya existe en el sistema.` });
+    const fotos = (Array.isArray(req.body?.fotos) ? req.body.fotos : []).filter(Boolean).slice(0, 3);
+    const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });
+    if (bytes.some(x => !x || x.length < 2000 || x.length > 4 * 1024 * 1024 || x[0] !== 0xff || x[1] !== 0xd8)) return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida." });
+    const quien = req.usuario.usuario || "—";
+    const ids = bytes.length ? await subirFotosDrive(bytes) : [];
+    await sql.transaction([
+      sql`INSERT INTO bienes (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, padron, clasificacion, registrado_por, registrado_en, registro_op)
+        VALUES (${inv}, ${t("descripcion")}, ${t("marca")}, ${t("modelo")}, ${t("serie")}, ${t("material")}, ${t("color")}, ${t("ubicacion")}, ${t("unidad_presupuestal")}, ${t("adscripcion")}, ${t("estado_fisico", 40)}, ${t("caracteristicas", 1000)},
+          'Registro en sistema', ${clas}, ${quien}, now(), ${opId || null})`,
+      sql`INSERT INTO existencias (no_inventario, quien) VALUES (${inv}, ${quien}) ON CONFLICT DO NOTHING`,
+      ...ids.map((x, i) => sql`INSERT INTO fotos_capturadas (no_inventario, orden, drive_id, quien) VALUES (${inv}, ${i + 1}, ${x}, ${quien})`),
+    ]);
+    programarFicha(inv);
+    res.json({ ok: true, no_inventario: inv, fotos: ids.length });
+  } catch (e) { fallo(res, e, "No se pudo registrar el bien."); }
 });
 
 // ── Captura de las 3 fotos de un bien que no tenía (desde el celular). Se pueden volver a tomar.
