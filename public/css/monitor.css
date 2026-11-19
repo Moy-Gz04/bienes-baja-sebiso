@@ -84,3 +84,5 @@
 .mo-firma{ display:flex; align-items:center; gap:4px; margin-top:6px; font-size:10.5px; font-weight:600; color:var(--txt2); }
 .mo-firma.ok{ color:var(--reap); }
 .mo-ficha-gen{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--dif); }
+/* Ficha ya entregada en los PDF FICHAS NUEVAS */
+.mo-en-pdf{ background:#dff3e4; box-shadow:inset 3px 0 0 var(--reap); }

@@ -56,6 +56,8 @@ sql`CREATE TABLE IF NOT EXISTS existencias (
 // Fichas escaneadas con firma: si bienes.pdf_drive_id coincide con drive_id, la ficha vigente es la firmada
 // ficha_pendiente: la ficha de Drive quedó vieja; mientras se resube, el sistema la arma al momento desde la BD
 sql`ALTER TABLE bienes ADD COLUMN IF NOT EXISTS ficha_pendiente BOOLEAN NOT NULL DEFAULT false`.catch(e => console.error("ficha_pendiente:", e.message));
+// Fichas ya entregadas juntas en los PDF "FICHAS NUEVAS": el monitor pinta su casilla en verde
+sql`CREATE TABLE IF NOT EXISTS fichas_en_pdf (no_inventario TEXT PRIMARY KEY, lote TEXT, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`.catch(e => console.error("fichas_en_pdf:", e.message));
 sql`CREATE TABLE IF NOT EXISTS fichas_firmadas (no_inventario TEXT PRIMARY KEY, drive_id TEXT NOT NULL)`
   .catch(e => console.error("fichas_firmadas:", e.message));
 
@@ -230,10 +232,10 @@ app.get("/api/monitor-existencias", sesion, async (req, res) => {
   if (!["monitor", "completo", "existencia"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve el monitor." });
   try {
     const filas = await sql`
-      SELECT x.no_inventario, x.quien, x.cuando, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.registrado_por IS NOT NULL AS nuevo, b.pdf_drive_id IS NOT NULL AS tiene_ficha, (ff.drive_id IS NOT NULL AND ff.drive_id = b.pdf_drive_id) AS firmada,
+      SELECT x.no_inventario, x.quien, x.cuando, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.registrado_por IS NOT NULL AS nuevo, b.pdf_drive_id IS NOT NULL AS tiene_ficha, (ff.drive_id IS NOT NULL AND ff.drive_id = b.pdf_drive_id) AS firmada, (fp.no_inventario IS NOT NULL) AS en_pdf,
         COALESCE(e.clasificacion, b.clasificacion) AS clasificacion,
         to_char(x.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI:SS') AS hora
-      FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN fichas_firmadas ff USING (no_inventario)
+      FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN fichas_firmadas ff USING (no_inventario) LEFT JOIN fichas_en_pdf fp USING (no_inventario)
       ORDER BY x.cuando DESC`;
     const [t] = await sql`SELECT count(*)::int AS total FROM bienes`;
     // confirmados sin ficha: se genera sola (de 3 en 3 para no saturar Drive)
