@@ -1,4 +1,4 @@
-﻿<script>
+<script>
 if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){ window.location.href = 'index.html'; }
 </script>
 <!DOCTYPE html>
@@ -42,7 +42,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   <div id="moPanel" role="tabpanel" aria-labelledby="moTab0" tabindex="0">
     <div class="mo-lista">
       <table class="mo-tabla" aria-label="Existencias confirmadas">
-        <thead><tr><th scope="col">Hora</th><th scope="col">No. inventario</th><th scope="col">Descripción</th><th scope="col">Clasificación</th><th scope="col">Estado físico</th><th scope="col">Confirmó</th></tr></thead>
+        <thead><tr><th scope="col">Hora</th><th scope="col">No. inventario</th><th scope="col">Descripción</th><th scope="col">Clasificación</th><th scope="col">Estado físico</th><th scope="col">Confirmó</th><th scope="col">Ficha técnica</th></tr></thead>
         <tbody id="moLista"></tbody>
       </table>
       <div class="mo-vacio" id="moVacio" role="status"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Cargando confirmaciones…</strong><p>En un momento verás las existencias registradas.</p></div>

@@ -46,7 +46,7 @@
       const tiempo = momento(d);
       const clase = GRUPOS.find(g => g[1] === d.clasificacion)?.[2] || "";
       const detalle = [["Marca", d.marca], ["Modelo", d.modelo], ["Serie", d.serie]].filter(([, v]) => v).map(([etiqueta, v]) => `${etiqueta}: ${v}`).join(" · ");
-      return `<tr class="${nuevos.has(String(d.no_inventario)) ? "nueva" : ""}"><td data-label="Hora"><div><strong class="mo-hora">${esc(tiempo.hora)}</strong><small>${esc(tiempo.fecha)}</small></div></td><td data-label="No. inventario"><b class="b-num">${esc(d.no_inventario)}</b></td><td data-label="Descripción"><div><strong>${esc(d.descripcion || "Sin descripción")}</strong><small>${esc(detalle)}</small>${d.nuevo ? '<span class="mo-nuevo">Nuevo</span>' : ""}</div></td><td data-label="Clasificación"><span class="b-pill ${clase}">${esc(d.clasificacion || "Sin clasificación")}</span></td><td data-label="Estado físico"><span>${esc(d.estado_fisico || "Sin especificar")}</span></td><td data-label="Confirmó"><span>${esc(d.quien || "Sin especificar")}</span></td></tr>`;
+      return `<tr class="${nuevos.has(String(d.no_inventario)) ? "nueva" : ""}"><td data-label="Hora"><div><strong class="mo-hora">${esc(tiempo.hora)}</strong><small>${esc(tiempo.fecha)}</small></div></td><td data-label="No. inventario"><b class="b-num">${esc(d.no_inventario)}</b></td><td data-label="Descripción"><div><strong>${esc(d.descripcion || "Sin descripción")}</strong><small>${esc(detalle)}</small>${d.nuevo ? '<span class="mo-nuevo">Nuevo</span>' : ""}</div></td><td data-label="Clasificación"><span class="b-pill ${clase}">${esc(d.clasificacion || "Sin clasificación")}</span></td><td data-label="Estado físico"><span>${esc(d.estado_fisico || "Sin especificar")}</span></td><td data-label="Confirmó"><span>${esc(d.quien || "Sin especificar")}</span></td><td data-label="Ficha técnica">${fichaCelda(d)}</td></tr>`;
     }).join("");
     $("moConteo").textContent = vistos ? `${n(sel.length)} ${sel.length === 1 ? "confirmación" : "confirmaciones"}` : "";
     $("moVacio").hidden = ver.length > 0;
@@ -108,3 +108,20 @@
   cargar();
   setInterval(cargar, 4000);
 })();
+
+// ── Ficha técnica: firmada (escaneada), del sistema (sin firma) o generándose
+function fichaCelda(d) {
+  if (!d.tiene_ficha || d.ficha_generando) return `<span class="mo-ficha-gen"><i class="bi bi-hourglass-split"></i> Generando…</span>`;
+  const firma = d.firmada ? `<span class="mo-firma ok"><i class="bi bi-pen-fill"></i> Firmada</span>` : `<span class="mo-firma"><i class="bi bi-file-earmark"></i> Sin firma</span>`;
+  return `<button type="button" class="mo-ficha" data-ficha="${esc(d.no_inventario)}" aria-label="Ver ficha técnica del ${esc(d.no_inventario)}"><i class="bi bi-file-earmark-pdf"></i> Ver ficha</button>${firma}`;
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-ficha]"); if (!b) return;
+  const v = window.open("about:blank", "_blank"); b.disabled = true;
+  try {
+    const r = await fetch(`/api/ficha/${encodeURIComponent(b.dataset.ficha)}/enlace`, { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+    const j = await r.json(); if (!j.ok) throw new Error(j.mensaje);
+    if (v) v.location = j.url; else location.href = j.url;
+  } catch (err) { if (v) v.close(); alert("No se pudo abrir la ficha: " + (err.message || "intenta de nuevo")); }
+  finally { b.disabled = false; }
+});

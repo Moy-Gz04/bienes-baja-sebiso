@@ -53,6 +53,10 @@ sql`CREATE TABLE IF NOT EXISTS existencias (
   no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar existencias:", e.message));
 
+// Fichas escaneadas con firma: si bienes.pdf_drive_id coincide con drive_id, la ficha vigente es la firmada
+sql`CREATE TABLE IF NOT EXISTS fichas_firmadas (no_inventario TEXT PRIMARY KEY, drive_id TEXT NOT NULL)`
+  .catch(e => console.error("fichas_firmadas:", e.message));
+
 sql`CREATE TABLE IF NOT EXISTS fotos_drive (nombre TEXT PRIMARY KEY, drive_id TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("fotos_drive:", e.message));
 
@@ -105,7 +109,7 @@ function sesion(req, res, next) {
     if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     // rol "monitor": solo ve en tiempo real las existencias confirmadas
-    if (req.usuario.rol === "monitor" && req.path !== "/api/monitor-existencias") return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta el monitor de existencias." });
+    if (req.usuario.rol === "monitor" && !(req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta el monitor de existencias." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
@@ -224,13 +228,15 @@ app.get("/api/monitor-existencias", sesion, async (req, res) => {
   if (!["monitor", "completo", "existencia"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve el monitor." });
   try {
     const filas = await sql`
-      SELECT x.no_inventario, x.quien, x.cuando, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.registrado_por IS NOT NULL AS nuevo,
+      SELECT x.no_inventario, x.quien, x.cuando, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.registrado_por IS NOT NULL AS nuevo, b.pdf_drive_id IS NOT NULL AS tiene_ficha, (ff.drive_id IS NOT NULL AND ff.drive_id = b.pdf_drive_id) AS firmada,
         COALESCE(e.clasificacion, b.clasificacion) AS clasificacion,
         to_char(x.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI:SS') AS hora
-      FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario)
+      FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN fichas_firmadas ff USING (no_inventario)
       ORDER BY x.cuando DESC`;
     const [t] = await sql`SELECT count(*)::int AS total FROM bienes`;
-    res.set("Cache-Control", "no-store").json({ ok: true, total: t.total, confirmados: filas.map(f => ({ ...f, cuando: new Date(f.cuando).toISOString() })) });
+    // confirmados sin ficha: se genera sola (de 3 en 3 para no saturar Drive)
+    filas.filter(f => !f.tiene_ficha && !generacion.has(f.no_inventario)).slice(0, 3).forEach(f => programarFicha(f.no_inventario));
+    res.set("Cache-Control", "no-store").json({ ok: true, total: t.total, confirmados: filas.map(f => ({ ...f, cuando: new Date(f.cuando).toISOString(), ficha_generando: generacion.get(f.no_inventario)?.estado === "generando" })) });
   } catch (e) { fallo(res, e, "No se pudo cargar el monitor."); }
 });
 
