@@ -19,15 +19,16 @@ function tarjeta(p) {
   const avatar = p.foto ? `<img src="${esc(p.foto)}" alt="Foto de ${esc(p.nombre)}" loading="lazy">` : `<span class="rg-ini${p.vacante ? " vac" : ""}">${p.vacante ? '<i class="bi bi-person-dash"></i>' : esc(iniciales(p.nombre))}</span>`;
   const detalle = (b) => [b.desc, b.carac].filter(Boolean).join(" — ");
   const chips = lista.map(b => `<li data-inv="${esc(b.inv)}"${b.ok ? ' class="ok"' : ""}${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}${b.desc ? `<small>${esc(b.desc)}</small>` : ""}</li>`).join("");
+  const pcs = (p.computadoras || []).map(c => `<li class="pc" title="${esc([c.desc, c.marca, c.modelo, c.serie && "Serie " + c.serie].filter(x => x && x !== "-").join(" · "))}"><i class="bi bi-pc-display"></i> ${esc(c.inv)}<small>${esc(c.desc || "COMPUTADORA")}</small></li>`).join("");
   const mas = n > VISIBLES ? `<button type="button" class="rg-mas" data-id="${p.id}">${abierta ? "Ver menos" : `Ver los ${n} bienes`}</button>` : "";
   return `<article class="rg-card${p.vacante ? " vacante" : ""}" data-persona="${p.id}">
     <div class="rg-foto">${avatar}</div>
     <div class="rg-datos"><h3>${esc(p.nombre)}</h3>
       <p class="rg-cargo">${esc(p.cargo || (p.vacante ? "Plaza vacante" : "Sin cargo registrado"))}</p>
       ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}</div>
-    <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span></div>
-    <ul class="rg-bienes">${chips}</ul>
-    <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}${p.vacante && !n ? `<button type="button" class="tv-btn rg-borrar" data-borrar="${p.id}" title="Eliminar vacante" aria-label="Eliminar ${esc(p.nombre)}"><i class="bi bi-trash3"></i></button>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}</div></article>`;
+    <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span>${p.computadoras?.length ? `<em class="rg-total-pc"><i class="bi bi-pc-display"></i> ${p.computadoras.length}</em>` : ""}</div>
+    <ul class="rg-bienes">${chips}${pcs}</ul>
+    <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}${p.vacante && !n ? `<button type="button" class="tv-btn rg-borrar" data-borrar="${p.id}" title="Eliminar vacante" aria-label="Eliminar ${esc(p.nombre)}"><i class="bi bi-trash3"></i></button>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}${p.resguardo_pc ? `<a class="tv-btn rg-pdf rg-pdf-pc" href="${esc(p.resguardo_pc)}" target="_blank" rel="noopener"><i class="bi bi-pc-display"></i> Resguardo cómputo</a>` : ""}</div></article>`;
 }
 
 function pintar() {
@@ -185,7 +186,7 @@ $("rgLista").addEventListener("click", (e) => {
 // ── Ventana de la persona: mover un No. de inventario a otra persona, cambiar la foto y registrar a alguien en una vacante
 const dlg = { id: 0, editar: false, borrar: false, mover: null, area: "", msg: "", ok: true, ocupado: false };
 const porId = (id) => PERSONAS.find(p => p.id === id);
-function indexar(p) { p.indice = norm([p.nombre, p.cargo, p.jefe, p.seccion, p.area, ...p.bienes.flatMap(b => [b.inv, b.desc, b.tipo, b.serie])].join(" ")); }
+function indexar(p) { p.indice = norm([p.nombre, p.cargo, p.jefe, p.seccion, p.area, ...p.bienes.flatMap(b => [b.inv, b.desc, b.tipo, b.serie]), ...(p.computadoras || []).flatMap(c => [c.inv, c.serie, "computadora"])].join(" ")); }
 function reducir(archivo) {
   return new Promise((ok, mal) => {
     const url = URL.createObjectURL(archivo), img = new Image();
@@ -248,13 +249,16 @@ function pintarDlg() {
         ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}
         <div class="rg-d-acc"><button type="button" class="tv-btn" id="rgEditar" aria-expanded="${dlg.editar}"><i class="bi bi-pencil"></i> ${dlg.editar ? "Cancelar edición" : "Editar datos"}</button><button type="button" class="tv-btn" id="rgCambiarFoto" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-camera"></i> ${p.foto ? "Cambiar foto" : "Agregar foto"}</button>
           ${p.resguardo ? `<a class="tv-btn" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}
+          ${p.resguardo_pc ? `<a class="tv-btn rg-btn-pc" href="${esc(p.resguardo_pc)}" target="_blank" rel="noopener"><i class="bi bi-pc-display"></i> Resguardo cómputo</a>` : ""}
           ${p.vacante ? `<button type="button" class="tv-btn rg-btn-borrar" id="rgBorrar" ${dlg.ocupado || p.bienes.length ? "disabled" : ""} title="${p.bienes.length ? "Mueve sus bienes antes de eliminarla" : "Eliminar esta vacante"}"><i class="bi bi-trash3"></i> Eliminar vacante</button>` : ""}</div></div>
     </div>
     ${dlg.borrar && p.vacante && !p.bienes.length ? `<div class="rg-confirmar" role="alert"><p><i class="bi bi-exclamation-triangle"></i> ¿Eliminar <b>${esc(p.nombre)}</b> de ${esc(p.area)}?</p><div><button type="button" class="tv-btn" id="rgBorrarNo">Cancelar</button><button type="button" class="tv-btn rg-btn-borrar on" id="rgBorrarSi" ${dlg.ocupado ? "disabled" : ""}><i class="bi bi-trash3"></i> Sí, eliminar</button></div></div>` : ""}
     <p class="rg-d-msg${dlg.ok ? "" : " mal"}" role="status">${esc(dlg.msg)}</p>
     ${edicion}${registro}
     <h3 class="rg-d-tit">Bienes en resguardo <small>${p.bienes.length}</small></h3>
-    ${p.bienes.length ? `<ul class="rg-d-bienes">${bienes}</ul>` : `<p class="rg-vacio rg-d-vacio">No tiene bienes asignados.</p>`}`;
+    ${p.bienes.length ? `<ul class="rg-d-bienes">${bienes}</ul>` : `<p class="rg-vacio rg-d-vacio">No tiene bienes asignados.</p>`}
+    ${p.computadoras?.length ? `<h3 class="rg-d-tit rg-d-tit-pc">Equipo de cómputo <small>${p.computadoras.length}</small></h3>
+    <ul class="rg-d-bienes rg-d-pcs">${p.computadoras.map(c => `<li class="pc"><div class="rg-b-fila"><i class="bi bi-pc-display"></i><div class="rg-b-txt"><b>${esc(c.inv)}</b><small>${esc([c.desc, c.marca, c.modelo, c.serie && "Serie " + c.serie].filter(x => x && x !== "-").join(" · "))}</small></div></div></li>`).join("")}</ul>` : ""}`;
 }
 
 function abrirPersona(id, inv) {

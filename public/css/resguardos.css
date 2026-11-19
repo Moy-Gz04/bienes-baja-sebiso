@@ -234,3 +234,17 @@
 .rg-barra .tv-buscar i{ color:#9F2241; }
 .rg-barra .tv-buscar:focus-within, .rg-barra select:focus{ background-color:rgba(255,255,255,.85); border-color:#BC955C; box-shadow:0 0 0 3px rgba(188,149,92,.3), inset 0 1px 0 #fff; }
 .rg-barra select.activo{ background-color:rgba(159,34,65,.12); color:#691C32; border-color:#9F2241; }
+
+/* Computadoras (resguardo escaneado): siempre en azul */
+.rg-bienes li.pc, .rg-card .rg-bienes li.pc{ background:#DCEBFF; color:#0B4FA8; text-shadow:none; cursor:default; }
+.rg-bienes li.pc small, .rg-card .rg-bienes li.pc small{ color:#2F6FC4; }
+.rg-bienes li.pc .bi{ font-size:10px; }
+.rg-total-pc{ display:inline-flex; align-items:center; gap:3px; margin-top:3px; padding:1px 7px; border-radius:999px; background:#DCEBFF; color:#0B4FA8; font-size:10.5px; font-style:normal; font-weight:800; text-shadow:none; }
+.rg-card .tv-btn.rg-pdf-pc, .tv-btn.rg-btn-pc{ background:#1D5FBF; border-color:#1D5FBF; color:#fff; text-shadow:none; }
+.rg-card .tv-btn.rg-pdf-pc:hover, .tv-btn.rg-btn-pc:hover{ background:#164C9A; border-color:#164C9A; color:#fff; }
+.rg-pie .rg-pdf + .rg-pdf-pc{ margin-left:0; }
+.rg-d-tit-pc{ color:#0B4FA8; }
+.rg-d-pcs > li.pc{ border-color:#9CC2F5; background:#F1F7FF; }
+.rg-d-pcs .rg-b-fila{ display:flex; align-items:center; gap:10px; padding:8px 12px; }
+.rg-d-pcs .rg-b-fila > .bi{ color:#1D5FBF; font-size:18px; }
+.rg-d-pcs .rg-b-txt b{ color:#0B4FA8; }

@@ -76,7 +76,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia", "monitor"], version: "nuevo-2026-11-19" }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia", "monitor"], version: "computadoras-2026-11-19" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -320,6 +320,9 @@ sql`ALTER TABLE resguardo_personas ADD COLUMN IF NOT EXISTS foto_v INT NOT NULL 
 sql`CREATE TABLE IF NOT EXISTS resguardo_correctos (no_inventario TEXT PRIMARY KEY, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("resguardo_correctos:", e.message));
 // Operaciones hechas sin internet se reenvían con un opId: si ya se aplicaron (la respuesta se perdió), se responde ok sin repetirlas.
+// Computadoras con resguardo escaneado (se cargan con _resguardos/computadoras/subir.js; el PDF vive en Drive)
+sql`CREATE TABLE IF NOT EXISTS resguardo_computadoras (no_inventario TEXT PRIMARY KEY, persona_id INT NOT NULL, descripcion TEXT, marca TEXT, modelo TEXT, serie TEXT, hojas INT[])`.catch(e => console.error("resguardo_computadoras:", e.message));
+sql`CREATE TABLE IF NOT EXISTS resguardo_compu_pdfs (persona_id INT PRIMARY KEY, nombre TEXT NOT NULL, pdf_drive_id TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`.catch(e => console.error("resguardo_compu_pdfs:", e.message));
 sql`CREATE TABLE IF NOT EXISTS resguardo_ops (op_id TEXT PRIMARY KEY, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`.catch(e => console.error("resguardo_ops:", e.message));
 app.use("/api/resguardos", async (req, res, next) => {
   const op = req.method === "POST" ? String(req.body?.opId ?? "").slice(0, 80) : "";
@@ -341,15 +344,18 @@ const cambio = (persona, tipo, detalle, quien) => sql`INSERT INTO resguardo_camb
 app.get("/api/resguardos", sesion, async (req, res) => {
   if (!accesoResguardos(req, res)) return;
   try {
-    const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto_drive_id IS NOT NULL) AS tiene_foto, (d.pdf_drive_id IS NOT NULL) AS tiene_pdf,
+    const personas = await sql`SELECT p.id, p.orden, p.area, p.area_orden, p.seccion, p.nombre, p.vacante, p.cargo, p.jefe, p.foto_v, (p.foto_drive_id IS NOT NULL) AS tiene_foto, (d.pdf_drive_id IS NOT NULL) AS tiene_pdf, EXISTS (SELECT 1 FROM resguardo_compu_pdfs k WHERE k.persona_id = p.id) AS tiene_pdf_pc,
       EXISTS (SELECT 1 FROM resguardo_cambios c WHERE c.persona_id = p.id AND c.tipo NOT IN ('foto', 'alta_vacante') AND c.cuando > COALESCE(d.cuando, 'epoch')) AS por_actualizar
       FROM resguardo_personas p LEFT JOIN resguardo_pdfs d ON d.persona_id = p.id ORDER BY p.orden`;
     const bienes = await sql`SELECT b.persona_id, b.no_inventario, b.tipo, b.modelo, b.descripcion, b.serie, b.observaciones, b.marca, b.caracteristicas, (c.no_inventario IS NOT NULL) AS correcto
       FROM resguardo_bienes b LEFT JOIN resguardo_correctos c ON c.no_inventario = b.no_inventario ORDER BY b.persona_id, b.orden`;
+    const pcs = await sql`SELECT persona_id, no_inventario, descripcion, marca, modelo, serie FROM resguardo_computadoras ORDER BY persona_id, no_inventario`;
+    const porPc = new Map();
+    for (const c of pcs) { if (!porPc.has(c.persona_id)) porPc.set(c.persona_id, []); porPc.get(c.persona_id).push({ inv: c.no_inventario, desc: c.descripcion, marca: c.marca, modelo: c.modelo, serie: c.serie }); }
     const por = new Map();
     for (const b of bienes) { if (!por.has(b.persona_id)) por.set(b.persona_id, []); por.get(b.persona_id).push({ inv: b.no_inventario, ok: b.correcto, tipo: b.tipo, modelo: b.modelo, desc: b.descripcion, serie: b.serie, obs: b.observaciones, marca: b.marca, carac: b.caracteristicas }); }
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" }), tr = jwt.sign({ proposito: "resguardo" }, SECRETO, { expiresIn: "8h" });
-    res.json({ ok: true, personas: personas.map(({ tiene_foto, tiene_pdf, foto_v, ...p }) => ({ ...p, resguardo: tiene_pdf ? `api/resguardos/${p.id}/pdf?t=${tr}` : null, foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}&v=${foto_v}` : null, bienes: por.get(p.id) || [] })) });
+    res.json({ ok: true, personas: personas.map(({ tiene_foto, tiene_pdf, tiene_pdf_pc, foto_v, ...p }) => ({ ...p, resguardo: tiene_pdf ? `api/resguardos/${p.id}/pdf?t=${tr}` : null, resguardo_pc: tiene_pdf_pc ? `api/resguardos/${p.id}/pdf-computo?t=${tr}` : null, computadoras: porPc.get(p.id) || [], foto: tiene_foto ? `api/resguardos/${p.id}/foto?t=${tf}&v=${foto_v}` : null, bienes: por.get(p.id) || [] })) });
   } catch (e) { fallo(res, e, "No se pudieron cargar los resguardos."); }
 });
 
@@ -470,6 +476,16 @@ app.get("/api/resguardos/:id/pdf", async (req, res) => {
     if (!f || !f.pdf_drive_id) return res.status(404).send("Esta persona todavía no tiene resguardo.");
     res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(f.nombre)}`, "Cache-Control": "private, max-age=300" }).send(await bajarDrive(f.pdf_drive_id));
   } catch (e) { fallo(res, e, "No se pudo cargar el resguardo."); }
+});
+
+// Resguardo escaneado (firmado) de las computadoras de la persona
+app.get("/api/resguardos/:id/pdf-computo", async (req, res) => {
+  try { if (jwt.verify(String(req.query.t || ""), SECRETO).proposito !== "resguardo") throw 0; } catch (e) { return res.status(401).send("El enlace venció. Vuelve a abrirlo desde el sistema."); }
+  try {
+    const [f] = await sql`SELECT nombre, pdf_drive_id FROM resguardo_compu_pdfs WHERE persona_id = ${Number(req.params.id) || 0}`;
+    if (!f) return res.status(404).send("Esta persona no tiene resguardo de computadora.");
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(f.nombre)}`, "Cache-Control": "private, max-age=300" }).send(await bajarDrive(f.pdf_drive_id));
+  } catch (e) { fallo(res, e, "No se pudo cargar el resguardo de la computadora."); }
 });
 
 app.get("/api/resguardos/:id/foto", async (req, res) => {
