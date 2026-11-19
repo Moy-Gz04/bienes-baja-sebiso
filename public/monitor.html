@@ -1,4 +1,4 @@
-<script>
+﻿<script>
 if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){ window.location.href = 'index.html'; }
 </script>
 <!DOCTYPE html>
@@ -13,38 +13,49 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
 <link rel="stylesheet" href="css/ssidebar.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="css/encabezado-sistemas.css">
+<link rel="stylesheet" href="css/minisebiso-flotante.css">
+<link rel="stylesheet" href="css/asistente-extra.css">
+<link rel="stylesheet" href="css/personal-up.css">
 <link rel="stylesheet" href="css/bienes.css">
-<style>
-.mo-vivo{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:var(--txt2); }
-.mo-vivo i{ width:9px; height:9px; border-radius:50%; background:#2F6B4F; animation:mo-p 1.6s infinite; }
-.mo-vivo.off i{ background:#9B1C31; animation:none; }
-@keyframes mo-p{ 50%{ opacity:.25 } }
-.mo-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
-.mo-lista{ background:#fff; border:1.5px solid var(--borde); border-radius:14px; overflow:hidden; }
-.mo-fila{ display:grid; grid-template-columns:150px 90px minmax(0,1fr) 190px 150px; gap:10px; align-items:center; padding:10px 14px; border-top:1px solid var(--borde); font-size:13px; }
-.mo-fila:first-child{ border-top:0; }
-.mo-cab{ background:#5b1e2e; color:#fff; font-weight:700; font-size:12px; }
-.mo-fila.nueva{ animation:mo-n 3s ease-out; }
-@keyframes mo-n{ from{ background:#FBF0DC } to{ background:transparent } }
-.mo-fila small{ color:var(--txt2); display:block; }
-.mo-vacio{ padding:26px; text-align:center; color:var(--txt2); }
-.mo-resto{ padding:10px; text-align:center; color:var(--txt2); font-size:12px; }
-</style>
+<link rel="stylesheet" href="css/monitor.css">
 </head>
 <body>
 <div id="sidebar-container"></div>
 <div class="contenido">
-<section class="tv">
+<section class="tv mo-monitor">
   <header class="tv-cabeza">
-    <div><p class="tv-eyebrow">Inventario de bienes</p><h1>Monitor de existencias confirmadas</h1></div>
-    <div class="b-cabeza-der"><div class="b-resumen" id="moResumen" aria-live="polite"></div><span class="mo-vivo" id="moVivo"><i></i><span>En vivo</span></span></div>
+    <div><p class="tv-eyebrow">INVENTARIO DE BIENES</p><h1>Monitor de existencias</h1></div>
+    <div class="b-cabeza-der">
+      <div class="b-resumen" id="moResumen" aria-live="polite"><span><b>—</b> bienes</span><span><b>—</b> confirmados</span><span><b>—</b> por confirmar</span></div>
+      <div class="mo-vivo pendiente" id="moVivo" role="status"><i aria-hidden="true"></i><span>Conectando…</span></div>
+    </div>
   </header>
+  <div class="mo-avance">
+    <div><label for="moProgreso">Avance de confirmación</label><strong id="moPorcentaje">—</strong></div>
+    <progress id="moProgreso" max="100" value="0">0%</progress>
+  </div>
   <div class="b-grupos mo-grupos" id="moGrupos" role="tablist" aria-label="Clasificación"></div>
-  <div class="mo-lista" id="moLista"></div>
+  <div class="mo-barra">
+    <label class="tv-buscar"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="moBuscar" placeholder="Buscar por No. inventario, descripción o quién confirmó…" aria-label="Buscar por número de inventario, descripción o quién confirmó"></label>
+    <span id="moConteo" role="status"></span>
+  </div>
+  <div id="moPanel" role="tabpanel" aria-labelledby="moTab0" tabindex="0">
+    <div class="mo-lista">
+      <table class="mo-tabla" aria-label="Existencias confirmadas">
+        <thead><tr><th scope="col">Hora</th><th scope="col">No. inventario</th><th scope="col">Descripción</th><th scope="col">Clasificación</th><th scope="col">Estado físico</th><th scope="col">Confirmó</th></tr></thead>
+        <tbody id="moLista"></tbody>
+      </table>
+      <div class="mo-vacio" id="moVacio" role="status"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Cargando confirmaciones…</strong><p>En un momento verás las existencias registradas.</p></div>
+      <div class="mo-resto" id="moResto" hidden></div>
+    </div>
+  </div>
 </section>
 </div>
 <script src="js/sidebar.js"></script>
 <script src="js/encabezado-sistemas.js"></script>
 <script src="js/monitor.js"></script>
+<script src="js/minisebiso-flotante.js"></script>
+<script src="js/asistente-extra.js"></script>
+<script src="js/asistente-ventanas.js"></script>
 </body>
 </html>

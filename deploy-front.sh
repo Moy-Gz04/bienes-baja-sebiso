@@ -4,8 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 DESTINO="$(mktemp -d)"
-cp -r public/. "$DESTINO/"
-rm -rf "$DESTINO/p" "$DESTINO/q"
+tar -C public --exclude=./p --exclude=./q -cf - . | tar -C "$DESTINO" -xf -
 cp netlify.toml "$DESTINO/"
 netlify deploy --prod --dir="$DESTINO" --site="$1" --message "Bienes en propuesta de baja"
 rm -rf "$DESTINO"
