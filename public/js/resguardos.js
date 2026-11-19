@@ -23,13 +23,13 @@ function tarjeta(p) {
   const todos = (chips + pcs).split("</li>").filter(Boolean).map(x => x + "</li>"), vis = abierta ? todos : todos.slice(0, VISIBLES);
   const mas = total > VISIBLES ? `<button type="button" class="rg-mas" data-id="${p.id}" aria-expanded="${abierta}"><i class="bi bi-arrows-${abierta ? "collapse" : "expand"}"></i> ${abierta ? "Ver menos" : `Ver todos (${total})`}</button>` : "";
   return `<article class="rg-card${p.vacante ? " vacante" : ""}${abierta ? " abierta" : ""}" data-persona="${p.id}">
-    ${p.por_actualizar ? `<span class="rg-pend rg-pend-top" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}<div class="rg-foto">${avatar}</div>
+    <div class="rg-foto">${avatar}</div>
     <div class="rg-datos"><h3>${esc(p.nombre)}</h3>
       <p class="rg-cargo">${esc(p.cargo || (p.vacante ? "Plaza vacante" : "Sin cargo registrado"))}</p>
       ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}</div>
     <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span>${p.computadoras?.length ? `<em class="rg-total-pc"><i class="bi bi-pc-display"></i> ${p.computadoras.length}</em>` : ""}</div>
     <ul class="rg-bienes">${vis.join("")}</ul>
-    <div class="rg-pie">${mas}${p.vacante && !n ? `<button type="button" class="tv-btn rg-borrar" data-borrar="${p.id}" title="Eliminar vacante" aria-label="Eliminar ${esc(p.nombre)}"><i class="bi bi-trash3"></i></button>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}${p.resguardo_pc ? `<a class="tv-btn rg-pdf rg-pdf-pc" href="${esc(p.resguardo_pc)}" target="_blank" rel="noopener"><i class="bi bi-pc-display"></i> Resguardo cómputo</a>` : ""}</div></article>`;
+    <div class="rg-pie">${mas}${p.vacante && !n ? `<button type="button" class="tv-btn rg-borrar" data-borrar="${p.id}" title="Eliminar vacante" aria-label="Eliminar ${esc(p.nombre)}"><i class="bi bi-trash3"></i></button>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf${p.por_actualizar ? " pendiente" : ""}" href="${esc(p.resguardo)}" target="_blank" rel="noopener"${p.por_actualizar ? ' title="PDF por actualizar: se movieron bienes o se registró a la persona después de generarlo"' : ""}><i class="bi bi-file-earmark-pdf"></i> Ver resguardo${p.por_actualizar ? '<span class="rg-pend-chip"><i class="bi bi-arrow-repeat"></i> Por actualizar</span>' : ""}</a>` : ""}${p.resguardo_pc ? `<a class="tv-btn rg-pdf rg-pdf-pc" href="${esc(p.resguardo_pc)}" target="_blank" rel="noopener"><i class="bi bi-pc-display"></i> Resguardo cómputo</a>` : ""}</div></article>`;
 }
 
 function pintar() {

@@ -334,3 +334,6 @@
 .rg-card .rg-pie > .rg-admin{ order:4; grid-column:1 / -1; }
 .rg-card .rg-pie:has(.rg-mas) > .rg-admin, .rg-card .rg-pie:has(.rg-borrar) > .rg-admin{ grid-column:auto; }
 .rg-card .rg-pie:not(:has(.rg-pdf-pc)) > .rg-pdf, .rg-card .rg-pie:not(:has(.rg-pdf:not(.rg-pdf-pc))) > .rg-pdf-pc{ grid-column:1 / -1; }
+/* Aviso "Por actualizar" dentro del botón verde */
+.rg-card .rg-pie > .rg-pdf.pendiente{ position:relative; overflow:visible; }
+.rg-pend-chip{ position:absolute; top:-9px; right:6px; display:inline-flex; align-items:center; gap:3px; height:17px; padding:0 7px; border-radius:99px; background:#FFF4DC; border:1px solid #E8C77A; color:#8A5A00; font:700 9.5px 'Montserrat',sans-serif; line-height:1; }
