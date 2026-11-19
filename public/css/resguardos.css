@@ -326,3 +326,11 @@
 .rg-card .rg-bienes li{ background:rgba(255,255,255,.6); }
 .rg-card .tv-btn.rg-pdf:not(.rg-pdf-pc){ background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
 .rg-card .tv-btn.rg-pdf:not(.rg-pdf-pc):hover{ background:#1E6B3F; border-color:#1E6B3F; color:#fff; }
+/* Pie: verde y azul juntos arriba; Editar siempre en la última fila (con "Ver todos" o "Eliminar" a su lado si existen) */
+.rg-card .rg-pie > :last-child:nth-child(odd){ grid-column:auto; }
+.rg-card .rg-pie > .rg-pdf:not(.rg-pdf-pc){ order:1; }
+.rg-card .rg-pie > .rg-pdf-pc{ order:2; }
+.rg-card .rg-pie > .rg-mas, .rg-card .rg-pie > .rg-borrar{ order:3; }
+.rg-card .rg-pie > .rg-admin{ order:4; grid-column:1 / -1; }
+.rg-card .rg-pie:has(.rg-mas) > .rg-admin, .rg-card .rg-pie:has(.rg-borrar) > .rg-admin{ grid-column:auto; }
+.rg-card .rg-pie:not(:has(.rg-pdf-pc)) > .rg-pdf, .rg-card .rg-pie:not(:has(.rg-pdf:not(.rg-pdf-pc))) > .rg-pdf-pc{ grid-column:1 / -1; }
