@@ -359,3 +359,8 @@ body.solo-existencia .b-grupos{ grid-template-columns:repeat(3,minmax(0,1fr)); }
 body.solo-existencia .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
 @media (max-width:900px){ body.solo-existencia .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; } body.solo-existencia .b-grupo{ padding:6px 7px 6px 9px; } body.solo-existencia .b-grupo span{ font-size:10px; } }
 @media (max-width:760px){ #bNuevo{ padding:8px 12px; } body.solo-existencia .b-cabeza-der{ display:flex !important; } }
+/* botón Galería dentro de cada casilla de foto */
+.b-cap-gal{ position:absolute; top:6px; right:6px; z-index:3; display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border:1px solid var(--borde); border-radius:999px; background:rgba(255,255,255,.95); color:var(--g); font:700 10.5px 'Montserrat',sans-serif; cursor:pointer; }
+.b-cap-gal:hover{ background:var(--g); color:#fff; }
+.b-cap-gal:focus-visible{ outline:2px solid var(--g); outline-offset:1px; }
+@media (max-width:900px){ .b-cap-gal{ padding:6px 9px; font-size:11px; } }

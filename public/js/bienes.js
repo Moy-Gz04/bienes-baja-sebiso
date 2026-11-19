@@ -743,3 +743,28 @@ async function marcarExistencia(inv) {
     await refrescarSync(); enviarCola();
   } finally { marcando = false; }
 }
+
+// ── Galería: cada casilla de foto (captura y registro) trae un botón para elegir la imagen de la galería.
+// La casilla sigue abriendo la cámara; el botón usa un selector sin "capture" y entrega la foto al mismo cuadro.
+document.addEventListener("DOMContentLoaded", () => {
+  ["bCapCasillas", "bNuevoCasillas"].forEach(id => {
+    const cont = $(id); if (!cont) return;
+    [...cont.children].forEach(label => {
+      const cam = label.querySelector("input[type=file]");
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "b-cap-gal"; btn.innerHTML = `<i class="bi bi-images"></i> Galería`;
+      btn.setAttribute("aria-label", `Elegir de la galería: ${label.querySelector("span")?.textContent || "foto"}`);
+      btn.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const sel = document.createElement("input"); sel.type = "file"; sel.accept = "image/*";
+        sel.addEventListener("change", () => {
+          if (!sel.files || !sel.files[0]) return;
+          const dt = new DataTransfer(); dt.items.add(sel.files[0]); cam.files = dt.files;   // mismo flujo que la cámara
+          cam.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        sel.click();
+      });
+      label.appendChild(btn);
+    });
+  });
+});
