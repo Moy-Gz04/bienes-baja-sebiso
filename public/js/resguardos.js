@@ -7,7 +7,7 @@ const iniciales = (n) => n.split(/\s+/).filter(w => /^\p{L}/u.test(w) && w.lengt
 const confirmada = (p) => p.bienes.length > 0 && p.bienes.every(b => b.ok);
 const conteo = (ps) => { const c = ps.filter(p => p.bienes.length), ok = c.filter(confirmada).length; return { ok, falta: c.length - ok, bOk: c.reduce((a, p) => a + p.bienes.filter(b => b.ok).length, 0), bFalta: c.reduce((a, p) => a + p.bienes.filter(b => !b.ok).length, 0) }; };
 const textoConteo = (k) => `<b class="rg-c-ok"><i class="bi bi-check-circle-fill"></i> ${k.ok} confirmados</b> · <b class="rg-c-falta"><i class="bi bi-hourglass-split"></i> ${k.falta} por confirmar</b> <small>(bienes: ${k.bOk} correctos · ${k.bFalta} por confirmar)</small>`;
-const VISIBLES = 8;   // bienes que se ven sin abrir la tarjeta
+const VISIBLES = 6;   // bienes que se ven sin abrir la tarjeta
 
 function filtrados() {
   const q = norm($("rgBuscar").value).split(/\s+/).filter(Boolean), foto = $("rgFoto").value, tipo = $("rgTipo").value, conf = $("rgEstado").value;
@@ -15,19 +15,20 @@ function filtrados() {
 }
 
 function tarjeta(p) {
-  const abierta = estado.abiertos.has(p.id), n = p.bienes.length, lista = abierta ? p.bienes : p.bienes.slice(0, VISIBLES);
+  const abierta = estado.abiertos.has(p.id), n = p.bienes.length, npc = (p.computadoras || []).length, total = n + npc;
   const avatar = p.foto ? `<img src="${esc(p.foto)}" alt="Foto de ${esc(p.nombre)}" loading="lazy">` : `<span class="rg-ini${p.vacante ? " vac" : ""}">${p.vacante ? '<i class="bi bi-person-dash"></i>' : esc(iniciales(p.nombre))}</span>`;
   const detalle = (b) => [b.desc, b.carac].filter(Boolean).join(" — ");
-  const chips = lista.map(b => `<li data-inv="${esc(b.inv)}"${b.ok ? ' class="ok"' : ""}${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}${b.desc ? `<small>${esc(b.desc)}</small>` : ""}</li>`).join("");
+  const chips = p.bienes.map(b => `<li data-inv="${esc(b.inv)}"${b.ok ? ' class="ok"' : ""}${detalle(b) ? ` title="${esc(detalle(b))}"` : ""}>${esc(b.inv)}${b.desc ? `<small>${esc(b.desc)}</small>` : ""}</li>`).join("");
   const pcs = (p.computadoras || []).map(c => `<li class="pc" title="${esc([c.desc, c.marca, c.modelo, c.serie && "Serie " + c.serie].filter(x => x && x !== "-").join(" · "))}"><i class="bi bi-pc-display"></i> ${esc(c.inv)}<small>${esc(c.desc || "COMPUTADORA")}</small></li>`).join("");
-  const mas = n > VISIBLES ? `<button type="button" class="rg-mas" data-id="${p.id}">${abierta ? "Ver menos" : `Ver los ${n} bienes`}</button>` : "";
-  return `<article class="rg-card${p.vacante ? " vacante" : ""}" data-persona="${p.id}">
+  const todos = (chips + pcs).split("</li>").filter(Boolean).map(x => x + "</li>"), vis = abierta ? todos : todos.slice(0, VISIBLES);
+  const mas = total > VISIBLES ? `<button type="button" class="rg-mas" data-id="${p.id}" aria-expanded="${abierta}"><i class="bi bi-arrows-${abierta ? "collapse" : "expand"}"></i> ${abierta ? "Ver menos" : `Ver todos (${total})`}</button>` : "";
+  return `<article class="rg-card${p.vacante ? " vacante" : ""}${abierta ? " abierta" : ""}" data-persona="${p.id}">
     <div class="rg-foto">${avatar}</div>
     <div class="rg-datos"><h3>${esc(p.nombre)}</h3>
       <p class="rg-cargo">${esc(p.cargo || (p.vacante ? "Plaza vacante" : "Sin cargo registrado"))}</p>
       ${p.jefe ? `<p class="rg-jefe"><i class="bi bi-diagram-2"></i> ${esc(p.jefe)}</p>` : ""}</div>
     <div class="rg-total"><b>${n}</b><span>${n === 1 ? "bien" : "bienes"}</span>${p.computadoras?.length ? `<em class="rg-total-pc"><i class="bi bi-pc-display"></i> ${p.computadoras.length}</em>` : ""}</div>
-    <ul class="rg-bienes">${chips}${pcs}</ul>
+    <ul class="rg-bienes">${vis.join("")}</ul>
     <div class="rg-pie">${mas}${p.por_actualizar ? `<span class="rg-pend" title="Se movieron bienes o se registró a la persona después de generar el PDF"><i class="bi bi-arrow-repeat"></i> PDF por actualizar</span>` : ""}${p.vacante && !n ? `<button type="button" class="tv-btn rg-borrar" data-borrar="${p.id}" title="Eliminar vacante" aria-label="Eliminar ${esc(p.nombre)}"><i class="bi bi-trash3"></i></button>` : ""}<button type="button" class="tv-btn rg-admin" data-admin="${p.id}"><i class="bi bi-pencil-square"></i> ${p.vacante ? "Editar / registrar" : "Editar / mover / foto"}</button>${p.resguardo ? `<a class="tv-btn rg-pdf" href="${esc(p.resguardo)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Ver resguardo</a>` : ""}${p.resguardo_pc ? `<a class="tv-btn rg-pdf rg-pdf-pc" href="${esc(p.resguardo_pc)}" target="_blank" rel="noopener"><i class="bi bi-pc-display"></i> Resguardo cómputo</a>` : ""}</div></article>`;
 }
 
