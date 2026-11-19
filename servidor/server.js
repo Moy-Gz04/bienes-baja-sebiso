@@ -72,7 +72,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia"], version: "nuevo-2026-11-19" }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia", "monitor"], version: "nuevo-2026-11-19" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -104,6 +104,8 @@ function sesion(req, res, next) {
     req.soloExistencia = req.usuario.rol === "existencia";
     if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
+    // rol "monitor": solo ve en tiempo real las existencias confirmadas
+    if (req.usuario.rol === "monitor" && req.path !== "/api/monitor-existencias") return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta el monitor de existencias." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
     next();
   } catch (e) { res.status(401).json({ ok: false, mensaje: "Tu sesión venció. Vuelve a iniciar sesión." }); }
@@ -215,6 +217,21 @@ app.post("/api/existencia", sesion, async (req, res) => {
       RETURNING quien, to_char(cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS cuando`;
     res.json({ ok: true, existencia: x });
   } catch (e) { fallo(res, e, "No se pudo guardar la confirmación."); }
+});
+
+// ── Monitor en tiempo real de las existencias confirmadas (rol monitor o completo); la ventana consulta cada pocos segundos.
+app.get("/api/monitor-existencias", sesion, async (req, res) => {
+  if (req.usuario.rol !== "monitor" && req.usuario.rol !== "completo") return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve el monitor." });
+  try {
+    const filas = await sql`
+      SELECT x.no_inventario, x.quien, x.cuando, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.registrado_por IS NOT NULL AS nuevo,
+        COALESCE(e.clasificacion, b.clasificacion) AS clasificacion,
+        to_char(x.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI:SS') AS hora
+      FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario)
+      ORDER BY x.cuando DESC`;
+    const [t] = await sql`SELECT count(*)::int AS total FROM bienes`;
+    res.set("Cache-Control", "no-store").json({ ok: true, total: t.total, confirmados: filas.map(f => ({ ...f, cuando: new Date(f.cuando).toISOString() })) });
+  } catch (e) { fallo(res, e, "No se pudo cargar el monitor."); }
 });
 
 // ── Cambiar la clasificación entre Baja definitiva y Para reaprovechamiento (rol existencia o completo).

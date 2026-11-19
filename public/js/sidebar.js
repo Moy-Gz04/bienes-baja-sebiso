@@ -11,9 +11,10 @@ const PAGINAS_TODAS = [
     { nombre:"Bienes", ruta:"bienes.html" },
     { nombre:"Resguardos", ruta:"resguardos.html" },
     { nombre:"Inventario - Mudanza", ruta:"mudanza.html" },
+    { nombre:"Monitor", ruta:"monitor.html" },
 ];
-const ROL_PAGINA = { mudanza: 'mudanza.html', resguardos: 'resguardos.html', existencia: 'bienes.html' }[localStorage.getItem('rol')];
-const PAGINAS = ROL_PAGINA ? PAGINAS_TODAS.filter(p => p.ruta === ROL_PAGINA) : PAGINAS_TODAS;
+const ROL_PAGINA = { mudanza: 'mudanza.html', resguardos: 'resguardos.html', existencia: 'bienes.html', monitor: 'monitor.html' }[localStorage.getItem('rol')];
+const PAGINAS = ROL_PAGINA ? PAGINAS_TODAS.filter(p => p.ruta === ROL_PAGINA) : PAGINAS_TODAS.filter(p => p.ruta !== "monitor.html");
 
 
 /* =========================
