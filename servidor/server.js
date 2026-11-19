@@ -258,7 +258,7 @@ app.post("/api/clasificacion", sesion, async (req, res) => {
   } catch (e) { fallo(res, e, "No se pudo cambiar la clasificación."); }
 });
 
-// ── Registrar un bien nuevo (rol existencia). Fotos opcionales (0 a 3). Queda con su existencia confirmada.
+// ── Registrar un bien nuevo (rol existencia). Estado físico y las 3 fotos obligatorios. Queda con su existencia confirmada.
 // Llega también desde la cola sin internet: si ya existe con el mismo opId se responde ok (reintento).
 app.post("/api/nuevo", sesion, async (req, res) => {
   if (!req.soloExistencia && req.usuario.rol !== "completo") return res.status(403).json({ ok: false, mensaje: "Tu usuario no registra bienes." });
@@ -268,10 +268,12 @@ app.post("/api/nuevo", sesion, async (req, res) => {
     const inv = String(d.no_inventario || "").trim().replace(/\s+/g, "");
     if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(inv)) return res.status(400).json({ ok: false, mensaje: "Escribe un No. de inventario válido." });
     if (!t("descripcion")) return res.status(400).json({ ok: false, mensaje: "Falta la descripción." });
+    if (!["Bueno", "Regular", "Malo", "Inservible"].includes(t("estado_fisico", 40))) return res.status(400).json({ ok: false, mensaje: "Falta el estado físico." });
     const clas = CAMBIABLES.includes(d.clasificacion) ? d.clasificacion : "Baja definitiva";
     const [ya] = await sql`SELECT registro_op FROM bienes WHERE no_inventario = ${inv}`;
     if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. de inventario ${inv} ya existe en el sistema.` });
     const fotos = (Array.isArray(req.body?.fotos) ? req.body.fotos : []).filter(Boolean).slice(0, 3);
+    if (fotos.length < 3) return res.status(400).json({ ok: false, mensaje: "Faltan fotos: se necesitan las 3." });
     const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });
     if (bytes.some(x => !x || x.length < 2000 || x.length > 4 * 1024 * 1024 || x[0] !== 0xff || x[1] !== 0xd8)) return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida." });
     const quien = req.usuario.usuario || "—";

@@ -128,7 +128,7 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
     <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
     <form id="bNuevoForm" novalidate>
       <div class="b-pdf-cabeza"><h2 id="bNuevoTitulo">Registrar bien nuevo</h2></div>
-      <p class="b-datos-ayuda">El No. de inventario y la descripción son obligatorios. Las fotos son opcionales: puedes subir las 3, algunas o ninguna. Queda con su existencia confirmada.</p>
+      <p class="b-datos-ayuda">El No. de inventario, la descripción, el estado físico y las 3 fotos son obligatorios. Queda con su existencia confirmada.</p>
       <div class="b-campos" id="bNuevoCampos">
         <label class="falta"><span>No. de inventario *</span><input name="no_inventario" inputmode="numeric" maxlength="40" required autocomplete="off"></label>
         <label class="a2 falta"><span>Descripción *</span><input name="descripcion" maxlength="300" required></label>
@@ -137,7 +137,7 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
         <label><span>Serie</span><input name="serie" maxlength="120"></label>
         <label><span>Material</span><input name="material" maxlength="120"></label>
         <label><span>Color</span><input name="color" maxlength="80"></label>
-        <label><span>Estado físico</span><select name="estado_fisico"><option value="">—</option><option>Bueno</option><option>Regular</option><option>Malo</option><option>Inservible</option></select></label>
+        <label class="falta"><span>Estado físico *</span><select name="estado_fisico" required><option value="">— Elige —</option><option>Bueno</option><option>Regular</option><option>Malo</option><option>Inservible</option></select></label>
         <label><span>Clasificación</span><select name="clasificacion"><option>Baja definitiva</option><option value="Para reaprovechamiento">Reaprovechamiento</option></select></label>
         <label class="a2"><span>Ubicación</span><input name="ubicacion" maxlength="300"></label>
         <label class="a2"><span>Unidad presupuestal</span><input name="unidad_presupuestal" maxlength="300"></label>
@@ -145,7 +145,7 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
         <label class="a3"><span>Observaciones</span><input name="caracteristicas" maxlength="1000"></label>
       </div>
       <div class="b-capfotos b-nuevo-fotos">
-        <p>Fotos (opcional)</p>
+        <p>Fotos (las 3 son obligatorias) *</p>
         <div class="b-capcasillas" id="bNuevoCasillas">
           <label><input type="file" accept="image/*" capture="environment" data-i="0"><img alt="Foto 1: frente" hidden><b class="b-cap-num">1</b><i class="bi bi-square b-cap-ico" aria-hidden="true"></i><span>Frente</span><small>Todo el bien, de frente</small></label>
           <label><input type="file" accept="image/*" capture="environment" data-i="1"><img alt="Foto 2: costado" hidden><b class="b-cap-num">2</b><i class="bi bi-layout-sidebar-inset b-cap-ico" aria-hidden="true"></i><span>Costado</span><small>Todo el bien, de lado</small></label>

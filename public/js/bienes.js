@@ -1,6 +1,6 @@
 let BIENES = [];
 let SOLO_CAPTURA = false;   // usuario que solo toma fotos de los bienes que no tienen
-const estado = { grupo: "", abierto: null, foto: 0, vista: [] };
+const estado = { grupo: "", abierto: null, foto: 0, vista: [], limite: 100 };
 let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
 const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
 let SOLO_EXISTENCIA = false; // usuario que solo consulta y confirma la existencia física (funciona sin internet)
@@ -98,7 +98,7 @@ async function marcarComprobado(inv, cual) {
 function pintar() {
   const lista = filtrados();
   estado.vista = lista;
-  $("bCuerpo").innerHTML = lista.map(b => `<tr data-inv="${esc(b.no_inventario)}">
+  $("bCuerpo").innerHTML = lista.slice(0, estado.limite).map(b => `<tr data-inv="${esc(b.no_inventario)}">
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
       <td class="b-num">${esc(b.no_inventario)}</td>
       <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small>${b.clasificacion === "Propuesta DIF" && b.propuesta_dif ? `<small class="b-area-dif">Área: ${esc(b.propuesta_dif)}</small>` : ""}${estado.grupo === "__capturar" ? `<small class="b-faltan">Falta: ${esc(faltantes(b).join(", "))}</small><button type="button" class="b-quitar" data-quitar title="Quitar de Capturar datos"><i class="bi bi-x-circle"></i> Quitar de este apartado</button>` : ""}</span></td>
@@ -107,7 +107,7 @@ function pintar() {
       <td class="b-d">${pesos(b.moi)}</td>
       <td class="b-c"><button type="button" class="p-icono b-ver" title="Ver ficha técnica" aria-label="Ver ficha técnica del ${esc(b.no_inventario)}"><i class="bi bi-file-earmark-text"></i></button></td>
       ${SOLO_CAPTURA ? "" : `<td class="b-c b-comp">${SOLO_EXISTENCIA ? botonExistencia(b) : comprobacion(b)}</td>`}
-    </tr>`).join("") || `<tr><td colspan="8" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
+    </tr>`).join("") + (lista.length > estado.limite ? `<tr class="b-mas"><td colspan="8" class="tv-vacio"><button type="button" class="btn" data-mas>Ver más (${(lista.length - estado.limite).toLocaleString("es-MX")} restantes)</button></td></tr>` : "") || `<tr><td colspan="8" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
   $("bConteo").textContent = `${lista.length.toLocaleString("es-MX")} ${lista.length === 1 ? "bien" : "bienes"}`;
   const total = lista.reduce((s, b) => s + (b.moi || 0), 0);
   if (SOLO_EXISTENCIA) { const c = lista.filter(b => b.existencia).length; $("bResumen").innerHTML = `<span><b>${lista.length.toLocaleString("es-MX")}</b> bienes</span><span><b>${c.toLocaleString("es-MX")}</b> confirmados</span><span><b>${(lista.length - c).toLocaleString("es-MX")}</b> por confirmar</span>`; return; }
@@ -431,6 +431,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       try { nuevoFotos[i] = await reducir(archivo); $("bNuevoMsg").textContent = ""; } catch (x) { $("bNuevoMsg").textContent = "Esa foto no se pudo leer. Tómala otra vez."; }
       pintarNuevoFotos();
     });
+    $("bNuevoCampos").addEventListener("change", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     $("bCambiarClas").addEventListener("click", () => estado.abierto && cambiarClasificacion(estado.abierto.no_inventario));
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
@@ -447,10 +448,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   pintarGrupos();
   $("bGrupos").addEventListener("click", (e) => {
     const g = e.target.closest(".b-grupo"); if (!g) return;
-    estado.grupo = g.dataset.grupo; pintarGrupos(); pintar();
+    estado.grupo = g.dataset.grupo; estado.limite = 100; pintarGrupos(); pintar();
   });
-  ["bBuscar", "bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", pintar));
-  $("bCuerpo").addEventListener("click", (e) => { const q = e.target.closest("[data-quitar]"); if (q) { e.stopPropagation(); quitarDeCaptura(q.closest("tr").dataset.inv); return; } const x = e.target.closest("[data-exist]"); if (x) { e.stopPropagation(); marcarExistencia(x.closest("tr").dataset.inv); return; } const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
+  let esperaBuscar;
+  const refiltrar = () => { estado.limite = 100; pintar(); };
+  $("bBuscar").addEventListener("input", () => { clearTimeout(esperaBuscar); esperaBuscar = setTimeout(refiltrar, 150); });
+  ["bEstado", "bFotos", "bFicha", "bOrden"].forEach(id => $(id).addEventListener("input", refiltrar));
+  $("bCuerpo").addEventListener("click", (e) => { if (e.target.closest("[data-mas]")) { estado.limite += 200; pintar(); return; } const q = e.target.closest("[data-quitar]"); if (q) { e.stopPropagation(); quitarDeCaptura(q.closest("tr").dataset.inv); return; } const x = e.target.closest("[data-exist]"); if (x) { e.stopPropagation(); marcarExistencia(x.closest("tr").dataset.inv); return; } const m = e.target.closest("[data-comp]"); if (m) { e.stopPropagation(); marcarComprobado(m.closest("tr").dataset.inv, m.dataset.comp); return; } const f = e.target.closest("tr[data-inv]"); if (f) verFicha(f.dataset.inv); });
   $("bMiniaturas").addEventListener("click", (e) => { const m = e.target.closest("button"); if (m) { estado.foto = +m.dataset.i; mostrarFoto(); } });
   const mover = (d) => { const n = estado.abierto.fotos.length; if (n) { estado.foto = (estado.foto + d + n) % n; mostrarFoto(); } };
   $("bFotoAnt").addEventListener("click", () => mover(-1));
@@ -684,7 +688,7 @@ function pintarNuevoFotos() {
 }
 function abrirNuevo() {
   $("bNuevoForm").reset(); nuevoFotos = [null, null, null]; pintarNuevoFotos();
-  $("bNuevoCampos").querySelectorAll("input[required]").forEach(i => i.closest("label").classList.add("falta"));
+  $("bNuevoCampos").querySelectorAll("[required]").forEach(i => i.closest("label").classList.add("falta"));
   $("bNuevoMsg").textContent = ""; $("bNuevoGuardar").disabled = false;
   abrir($("bNuevoDlg"));
   setTimeout(() => $("bNuevoForm").no_inventario.focus(), 50);
@@ -705,7 +709,9 @@ async function guardarNuevo(e) {
   if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(datos.no_inventario)) { $("bNuevoMsg").textContent = "Escribe el No. de inventario."; f.no_inventario.focus(); return; }
   if (!datos.descripcion) { $("bNuevoMsg").textContent = "Falta la descripción."; f.descripcion.focus(); return; }
   if (BIENES.some(x => x.no_inventario === datos.no_inventario)) { $("bNuevoMsg").textContent = `El No. ${datos.no_inventario} ya está en la lista.`; f.no_inventario.focus(); return; }
+  if (!datos.estado_fisico) { $("bNuevoMsg").textContent = "Elige el estado físico."; f.estado_fisico.focus(); return; }
   const n = nuevoFotos.filter(Boolean).length;
+  if (n < 3) { const fal = nuevoFotos.map((x, i) => x ? null : TOMAS[i]).filter(Boolean); $("bNuevoMsg").textContent = `Faltan fotos: ${fal.join(", ")}. Se necesitan las 3.`; return; }
   const M = window.MiniSEBISO, pregunta = `¿Registro el bien ${datos.no_inventario}?`;
   const detalle = `${datos.descripcion} · ${n ? n + (n === 1 ? " foto" : " fotos") : "sin fotos"} · ${datos.clasificacion === "Para reaprovechamiento" ? "Reaprovechamiento" : "Baja definitiva"}`;
   const si = M && M.preguntar && !M.apagado
