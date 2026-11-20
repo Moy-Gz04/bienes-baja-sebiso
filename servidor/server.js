@@ -85,9 +85,10 @@ app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-un
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
 app.post("/api/auth/login", async (req, res) => {
-  const ip = req.ip, ahora = Date.now();
+  // El freno cuenta solo fallos por IP + usuario (varios equipos en la misma red/NAT no se bloquean entre sí)
+  const ahora = Date.now(), ip = req.ip + "|" + String(req.body?.usuario || "").trim().toLowerCase();
   const reg = (intentos.get(ip) || []).filter(t => ahora - t < 15 * 60000);
-  if (reg.length >= 10) return res.status(429).json({ error: "Demasiados intentos. Espera unos minutos." });
+  if (reg.length >= 20) return res.status(429).json({ error: "Demasiados intentos. Espera unos minutos." });
   try {
     const usuario = String(req.body?.usuario || "").trim();
     const [u] = await sql`SELECT id, usuario, password_hash, area, rol, unidad FROM usuarios WHERE usuario = ${usuario}`;
