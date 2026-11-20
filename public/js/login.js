@@ -145,17 +145,3 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
     });
-
-});
-/* Si ya hay sesión guardada en este equipo (p. ej. el navegador recargó la página al abrir la cámara),
-   entra directo a su pantalla en lugar de pedir usuario y contraseña. Un token vencido se descarta. */
-(function(){
-    try{
-        const t = localStorage.getItem('token'), rol = localStorage.getItem('rol') || 'completo';
-        if(!t) return;
-        const p = JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-        if(p.exp && p.exp * 1000 < Date.now()){ localStorage.removeItem('token'); return; }
-        if(new URLSearchParams(location.search).has('salir')) return;
-        window.location.replace(rol === 'mudanza' ? 'mudanza.html' : rol === 'resguardos' ? 'resguardos.html' : rol === 'entrega' ? 'entrega.html' : rol === 'monitor' ? 'monitor.html' : 'bienes.html');
-    }catch(e){}
-})();
