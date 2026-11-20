@@ -408,6 +408,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     respuesta = await r.json();
   }
   BIENES = respuesta.bienes;
+  // Confirmación de existencia: los de Propuesta DIF no se cuentan ni se muestran
+  if (respuesta.rol === "existencia") BIENES = BIENES.filter(b => b.clasificacion_bien !== "Propuesta DIF");
   if (respuesta.rol === "captura") {
     SOLO_CAPTURA = true; document.querySelector(".b-comp-th")?.remove(); GRUPOS = GRUPOS_CAPTURA; estado.grupo = "Faltan fotos";
     document.body.classList.add("solo-captura");
@@ -593,7 +595,7 @@ function pintarSync() {
   const el = $("bSync"); if (!el) return;
   const off = sinRed(), n = sync.pend, r = sync.rech;
   let cls = "", html = "";
-  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)}${x.tipo === "clasif" ? " (cambio a " + esc(corta(x.clasificacion)) + ")" : x.tipo === "nuevo" ? " (registro nuevo)" : ""} — ${esc(x.mensaje)}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
+  if (r.length) { cls = "mal"; html = `<div><b><i class="bi bi-exclamation-triangle"></i> ${r.length} ${r.length === 1 ? "cambio no se pudo aplicar" : "cambios no se pudieron aplicar"}</b> (siguen guardados aquí)<ul>${r.map(x => `<li>${esc(x.no_inventario)}${x.tipo === "clasif" ? " (cambio a " + esc(corta(x.clasificacion)) + ")" : x.tipo === "nuevo" ? " (registro nuevo)" : ""} — ${esc(x.mensaje)}${x.tipo === "nuevo" && /ya existe/i.test(x.mensaje) ? " <b>Ese bien ya estaba registrado: búscalo en la lista, no hace falta registrarlo otra vez.</b>" : ""}</li>`).join("")}</ul></div><button type="button" class="tv-btn" id="bSyncReintentar"><i class="bi bi-arrow-repeat"></i> Reintentar</button>`; }
   else if (sync.sesion && n) { cls = "mal"; html = `<div><b><i class="bi bi-person-lock"></i> Tu sesión venció.</b> Tus ${n} cambios siguen guardados en este equipo; inicia sesión de nuevo y se subirán solos.</div><button type="button" class="tv-btn" id="bSyncSesion">Iniciar sesión</button>`; }
   else if (off) { cls = "off"; html = `<div><b><i class="bi bi-wifi-off"></i> Sin internet.</b> Puedes seguir confirmando${n ? `; hay ${n} ${n === 1 ? "cambio guardado" : "cambios guardados"} en este equipo` : ""} y se subirán solos cuando vuelva.</div>`; }
   else if (n) { cls = "env"; html = `<div><b><i class="bi bi-cloud-arrow-up"></i> Subiendo ${n} ${n === 1 ? "cambio" : "cambios"}…</b> Están guardados en este equipo.</div>`; }
@@ -634,7 +636,7 @@ async function recargarDatos() {
   try {
     const r = await fetch("/api/bienes", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
     const d = r.ok ? await r.json() : null; if (!d?.ok || sync.pend) return;
-    BIENES = d.bienes; sync.copia = false;
+    BIENES = d.bienes.filter(b => b.clasificacion_bien !== "Propuesta DIF"); sync.copia = false;
     BIENES.forEach(b => { b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.cog, b.clave_armonizada, b.adscripcion, b.unidad_presupuestal, b.edificio, b.folio_fiscal, b.propuesta_dif, b.caracteristicas, b.material, b.color, b.ubicacion].join(" ")); });
     tx("datos", "readwrite", s => s.put({ ...d, guardada: Date.now() }, "bienes")).catch(() => {});
     const abierto = estado.abierto && $("bDialogo").open ? estado.abierto.no_inventario : null;
