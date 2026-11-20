@@ -1,0 +1,35 @@
+<script>
+if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){ window.location.href = 'index.html'; }
+</script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<link rel="icon" href="favicon.ico">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrega de bienes · SEBISO</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="css/fuente.css">
+<link rel="stylesheet" href="css/entrega.css">
+</head>
+<body>
+<header class="en-cab">
+  <div><small>SEBISO · Coordinación Administrativa</small><h1>Entrega de bienes</h1></div>
+  <div class="en-cont"><span><b id="enPend">0</b> por entregar</span><span><b id="enHecho">0</b> entregados</span>
+    <button type="button" id="enSalir" class="en-btn"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</button></div>
+</header>
+<main class="en-main">
+  <div class="en-buscar">
+    <i class="bi bi-upc-scan"></i>
+    <input id="enQ" type="search" autocomplete="off" autofocus placeholder="Escanea el código o escribe No. de inventario, descripción, serie…" aria-label="Buscar bien">
+  </div>
+  <div id="enAviso" class="en-aviso" hidden></div>
+  <nav class="en-tabs">
+    <button type="button" data-t="pend" class="on">Por entregar</button>
+    <button type="button" data-t="hecho">Entregados</button>
+  </nav>
+  <div id="enLista" class="en-lista"></div>
+</main>
+<script src="js/entrega.js"></script>
+</body>
+</html>

@@ -49,7 +49,7 @@ async function login(){
             // REDIRECCIÓN
 
             window.location.href =
-            (data.rol === 'mudanza' ? "mudanza.html" : data.rol === 'resguardos' ? "resguardos.html" : data.rol === 'monitor' ? "monitor.html" : "bienes.html");
+            (data.rol === 'mudanza' ? "mudanza.html" : data.rol === 'resguardos' ? "resguardos.html" : data.rol === 'entrega' ? "entrega.html" : data.rol === 'monitor' ? "monitor.html" : "bienes.html");
 
         }
 
@@ -156,6 +156,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const p = JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
         if(p.exp && p.exp * 1000 < Date.now()){ localStorage.removeItem('token'); return; }
         if(new URLSearchParams(location.search).has('salir')) return;
-        window.location.replace(rol === 'mudanza' ? 'mudanza.html' : rol === 'resguardos' ? 'resguardos.html' : rol === 'monitor' ? 'monitor.html' : 'bienes.html');
+        window.location.replace(rol === 'mudanza' ? 'mudanza.html' : rol === 'resguardos' ? 'resguardos.html' : rol === 'entrega' ? 'entrega.html' : rol === 'monitor' ? 'monitor.html' : 'bienes.html');
     }catch(e){}
 })();

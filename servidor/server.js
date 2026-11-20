@@ -80,7 +80,7 @@ sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'com
 
 const fallo = (res, e, mensaje) => { console.error(mensaje, e); res.status(500).json({ ok: false, mensaje }); };
 
-app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia", "monitor"], version: "computadoras-2026-11-19" }));
+app.get("/api/salud", (req, res) => res.json({ ok: true, roles: ["mudanza-por-unidad", "resguardos", "existencia", "monitor", "entrega"], version: "computadoras-2026-11-19" }));
 
 // ── Inicio de sesión (con freno a intentos repetidos por IP)
 const intentos = new Map();
@@ -113,6 +113,8 @@ function sesion(req, res, next) {
     req.soloExistencia = req.usuario.rol === "existencia";
     if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
+    // rol "entrega": solo su mini sistema
+    if (req.usuario.rol === "entrega" && !(req.path === "/api/entregas" || req.path === "/api/entrega" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Entrega." });
     // rol "monitor": solo ve en tiempo real las existencias confirmadas
     if (req.usuario.rol === "monitor" && !(req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta el monitor de existencias." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
@@ -226,6 +228,33 @@ app.post("/api/existencia", sesion, async (req, res) => {
       RETURNING quien, to_char(cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS cuando`;
     res.json({ ok: true, existencia: x });
   } catch (e) { fallo(res, e, "No se pudo guardar la confirmación."); }
+});
+
+// ── Entrega (rol "entrega"): mini sistema aparte. Sobre los bienes con existencia confirmada se marca "Entregado".
+sql`CREATE TABLE IF NOT EXISTS entregas (no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
+  .catch(e => console.error("No se pudo preparar entregas:", e.message));
+app.get("/api/entregas", sesion, async (req, res) => {
+  if (!["entrega", "completo"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve Entrega." });
+  try {
+    const filas = await sql`
+      SELECT b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.adscripcion, COALESCE(e.clasificacion, b.clasificacion) AS clasificacion,
+        n.quien AS entregado_por, to_char(n.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS entregado_en
+      FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN entregas n USING (no_inventario)
+      ORDER BY b.no_inventario`;
+    res.json({ ok: true, bienes: filas.map(f => ({ ...f, entregado: !!f.entregado_por })) });
+  } catch (e) { fallo(res, e, "No se pudo cargar Entrega."); }
+});
+app.post("/api/entrega", sesion, async (req, res) => {
+  if (!["entrega", "completo"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no registra entregas." });
+  try {
+    const inv = String(req.body?.no_inventario || "").trim(), ent = req.body?.entregado;
+    if (typeof ent !== "boolean") return res.status(400).json({ ok: false, mensaje: "Indica si se entrega o se regresa." });
+    const [x] = await sql`SELECT 1 FROM existencias WHERE no_inventario = ${inv}`;
+    if (!x) return res.status(404).json({ ok: false, mensaje: `El bien ${inv} no tiene la existencia confirmada.` });
+    if (!ent) { await sql`DELETE FROM entregas WHERE no_inventario = ${inv}`; return res.json({ ok: true, entregado: false }); }
+    await sql`INSERT INTO entregas (no_inventario, quien) VALUES (${inv}, ${req.usuario.usuario || "—"}) ON CONFLICT (no_inventario) DO NOTHING`;
+    res.json({ ok: true, entregado: true });
+  } catch (e) { fallo(res, e, "No se pudo guardar la entrega."); }
 });
 
 // ── Monitor en tiempo real de las existencias confirmadas (rol monitor o completo); la ventana consulta cada pocos segundos.
