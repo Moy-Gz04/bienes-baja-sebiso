@@ -268,7 +268,7 @@ function verFicha(inv) {
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
   $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
-  if (SOLO_EXISTENCIA) { $("bDescargar").hidden = true; pintarBotonExistencia(b); pintarBotonClas(b); }
+  if (SOLO_EXISTENCIA) $("bDescargar").hidden = true;   // solo consulta: sin confirmar, regresar ni cambiar clasificación
   $("bCompletar").hidden = SOLO_CAPTURA || SOLO_COMPROBAR || SOLO_EXISTENCIA;
   if (b.ficha_generando && b.ficha_generando.estado === "generando") vigilarFicha(b);
   $("bCaptura").hidden = !b.pendiente;
@@ -422,9 +422,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-eyebrow").textContent = "Inventario de bienes";
     document.querySelector(".tv-cabeza h1").textContent = "Confirmación de existencia";
     document.querySelector(".b-comp-th").textContent = "Existencia";
-    $("bExistencia").addEventListener("click", () => estado.abierto && marcarExistencia(estado.abierto.no_inventario));
-    $("bNuevo").hidden = false;
-    $("bNuevo").addEventListener("click", abrirNuevo);
+    // 2026-11-19: el rol existencia queda solo para consulta (sin confirmar, regresar, cambiar clasificación ni registrar)
     $("bNuevoForm").addEventListener("submit", guardarNuevo);
     $("bNuevoCasillas").addEventListener("change", async (e) => {
       const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";
@@ -435,7 +433,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     $("bNuevoCampos").addEventListener("change", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
-    $("bCambiarClas").addEventListener("click", () => estado.abierto && cambiarClasificacion(estado.abierto.no_inventario));
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
   if (respuesta.rol === "comprobar") {
@@ -646,8 +643,8 @@ async function recargarDatos() {
 }
 
 function botonExistencia(b) {
-  if (!b.existencia) return `<button type="button" class="b-exist" data-exist aria-label="Confirmar existencia del ${esc(b.no_inventario)}"><i class="bi bi-check2-circle"></i> Confirmar existencia</button>`;
-  return `<span class="b-exist-ok" title="${esc(b.existencia.quien)} · ${esc(b.existencia.cuando)}"><i class="bi bi-patch-check-fill"></i> Confirmado<small>${esc(b.existencia.cuando)}</small></span><button type="button" class="b-exist-reg" data-exist title="Regresar a Por confirmar" aria-label="Regresar el ${esc(b.no_inventario)} a Por confirmar"><i class="bi bi-arrow-counterclockwise"></i></button>`;
+  if (!b.existencia) return `<span class="b-exist-pend"><i class="bi bi-hourglass-split"></i> Por confirmar</span>`;
+  return `<span class="b-exist-ok" title="${esc(b.existencia.quien)} · ${esc(b.existencia.cuando)}"><i class="bi bi-patch-check-fill"></i> Confirmado<small>${esc(b.existencia.cuando)}</small></span>`;
 }
 function pintarBotonExistencia(b) {
   const x = $("bExistencia"); x.hidden = false;
