@@ -237,11 +237,14 @@ app.get("/api/entregas", sesion, async (req, res) => {
   if (!["entrega", "completo"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve Entrega." });
   try {
     const filas = await sql`
-      SELECT b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.adscripcion, COALESCE(e.clasificacion, b.clasificacion) AS clasificacion,
+      SELECT b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.estado_fisico, b.adscripcion, b.unidad_presupuestal, b.ubicacion, b.edificio, b.color, b.material, COALESCE(e.clasificacion, b.clasificacion) AS clasificacion,
+        COALESCE((SELECT array_agg(COALESCE('https://lh3.googleusercontent.com/d/' || d.drive_id || '=w1400', f.ruta || '?v=20261104') ORDER BY f.orden) FROM fotos f LEFT JOIN fotos_drive d ON d.nombre = substring(f.ruta from '[^/]+$') WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
+        (SELECT count(*) FROM fotos_capturadas c WHERE c.no_inventario = b.no_inventario)::int AS n_capturadas,
         n.quien AS entregado_por, to_char(n.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS entregado_en
       FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) LEFT JOIN entregas n USING (no_inventario)
       ORDER BY b.no_inventario`;
-    res.json({ ok: true, bienes: filas.map(f => ({ ...f, entregado: !!f.entregado_por })) });
+    const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
+    res.json({ ok: true, bienes: filas.map(({ n_capturadas, ...f }) => ({ ...f, fotos: f.fotos.length ? f.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${f.no_inventario}/${i + 1}?t=${tf}`), entregado: !!f.entregado_por })) });
   } catch (e) { fallo(res, e, "No se pudo cargar Entrega."); }
 });
 app.post("/api/entrega", sesion, async (req, res) => {

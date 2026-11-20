@@ -47,22 +47,51 @@ async function marcar(inv, entregado) {
   } catch (e) { aviso("Sin conexión: no se guardó. Intenta de nuevo."); }
   finally { ocupado = false; $("enQ").focus(); }
 }
-// Pistola: escribe el código y manda Enter → coincidencia exacta de No. de inventario.
-$("enQ").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return; e.preventDefault();
-  const c = $("enQ").value.trim().replace(/\s+/g, ""); if (!c) return;
+// Ventana del bien: 3 fotos + datos + botón Entregado (con la confirmación de MiniSEBISO)
+let abierto = null, buffer = "";
+function abrirFicha(b) {
+  abierto = b; buffer = "";
+  $("enMInv").textContent = "No. " + b.no_inventario; $("enMTit").textContent = b.descripcion || "Bien";
+  const f = (b.fotos || []).slice(0, 3);
+  $("enMFotos").innerHTML = [0, 1, 2].map(i => f[i] ? `<img src="${esc(f[i])}" alt="Foto ${i + 1} del bien ${esc(b.no_inventario)}">` : `<div class="en-sinfoto">Sin foto ${i + 1}</div>`).join("");
+  const filas = [["Marca", b.marca], ["Modelo", b.modelo], ["Serie", b.serie], ["Estado físico", b.estado_fisico], ["Color", b.color], ["Material", b.material], ["Clasificación", b.clasificacion], ["Adscripción", b.adscripcion], ["Unidad", b.unidad_presupuestal], ["Ubicación", [b.ubicacion, b.edificio].filter(Boolean).join(" · ")]];
+  $("enMInfo").innerHTML = filas.filter(([, v]) => v && v !== "SIN MARCA" && v !== "S/M" && v !== "S/N").map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("");
+  $("enMOk").hidden = b.entregado; $("enMOk").dataset.inv = b.no_inventario;
+  $("enModal").hidden = false; $("enModal").focus(); document.activeElement?.blur?.();
+}
+function cerrarFicha() { abierto = null; buffer = ""; $("enModal").hidden = true; $("enQ").value = ""; $("enQ").focus(); }
+async function confirmarEntrega() {
+  const b = abierto; if (!b) return;
+  const pregunta = `¿Confirmas que el bien ${b.no_inventario} fue entregado?`, M = window.MiniSEBISO;
+  const si = M && M.preguntar && !M.apagado
+    ? await M.preguntar({ titulo: "Confirmar entrega", pregunta, detalle: b.descripcion, btnOk: "Sí, entregado", iconoOk: "ti-check", textoOk: "Lo paso a Entregados…", estiloOk: "dorado", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Sigue sin entregarse." })
+    : confirm(pregunta);
+  if (!si) return;
+  cerrarFicha(); await marcar(b.no_inventario, true);
+}
+function buscarCodigo(c) {
+  c = String(c || "").trim().replace(/s+/g, ""); $("enQ").value = ""; if (!c) return;
   const b = BIENES.find(x => x.no_inventario.toLowerCase() === c.toLowerCase());
   if (b) {
     tab = b.entregado ? "hecho" : "pend"; document.querySelectorAll(".en-tabs button").forEach(t => t.classList.toggle("on", t.dataset.t === tab));
-    foco = b.no_inventario; $("enQ").value = ""; pintar();
-    aviso(b.entregado ? `El bien ${b.no_inventario} ya estaba entregado (${b.entregado_en}).` : `Bien ${b.no_inventario} encontrado: presiona «Entregado».`, !b.entregado);
-  } else { $("enQ").value = ""; foco = null; aviso(`El No. ${c} no está entre los bienes con existencia confirmada. Revisa que se haya confirmado o registrado.`); pintar(); }
-  $("enQ").value = "";   // cada pistolazo deja la barra limpia para el siguiente
+    foco = b.no_inventario; pintar(); abrirFicha(b);
+    aviso(b.entregado ? `El bien ${b.no_inventario} ya estaba entregado (${b.entregado_en}).` : "", false);
+  } else { foco = null; aviso(`El No. ${c} no está entre los bienes con existencia confirmada. Revisa que se haya confirmado o registrado.`); pintar(); }
+}
+// Pistola: escribe el código y manda Enter. Con la ventana abierta la pistola no toca ningún botón: se acumula el código y el Enter abre el siguiente bien.
+$("enQ").addEventListener("keydown", (e) => { if (e.key !== "Enter") return; e.preventDefault(); buscarCodigo($("enQ").value); });
+document.addEventListener("keydown", (e) => {
+  if ($("enModal").hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "Escape") { cerrarFicha(); return; }
+  if (e.key === "Enter") { e.preventDefault(); const c = buffer; buffer = ""; if (c) { cerrarFicha(); buscarCodigo(c); } return; }
+  if (e.key.length === 1) { e.preventDefault(); buffer += e.key; }
 });
-$("enQ").addEventListener("focus", () => $("enQ").select());
+$("enMOk").addEventListener("click", confirmarEntrega);
+$("enMCancel").addEventListener("click", cerrarFicha); $("enMCerrar").addEventListener("click", cerrarFicha);
 $("enQ").addEventListener("input", () => { foco = null; pintar(); });
 $("enLista").addEventListener("click", (e) => { const b = e.target.closest("button[data-inv]"); if (b) marcar(b.dataset.inv, b.dataset.v === "1"); });
 document.querySelectorAll(".en-tabs button").forEach(t => t.addEventListener("click", () => { tab = t.dataset.t; foco = null; document.querySelectorAll(".en-tabs button").forEach(x => x.classList.toggle("on", x === t)); pintar(); $("enQ").focus(); }));
 $("enSalir").addEventListener("click", () => { if (confirm("¿Cerrar sesión?")) { localStorage.removeItem("token"); localStorage.removeItem("area"); location.href = "index.html"; } });
 document.addEventListener("click", (e) => { if (!e.target.closest("button,input")) $("enQ").focus(); });
 cargar(); setInterval(() => { if (!ocupado && !document.hidden) cargar(); }, 30000);
+$("enQ").addEventListener("focus", () => $("enQ").select());

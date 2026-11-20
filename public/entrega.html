@@ -10,6 +10,10 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
 <title>Entrega de bienes · SEBISO</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="css/fuente.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/minisebiso-flotante.css">
+<link rel="stylesheet" href="css/asistente-extra.css">
+<link rel="stylesheet" href="css/personal-up.css">
 <link rel="stylesheet" href="css/entrega.css">
 </head>
 <body>
@@ -30,6 +34,15 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   </nav>
   <div id="enLista" class="en-lista"></div>
 </main>
+<div id="enModal" class="en-modal" hidden tabindex="-1"><div class="en-caja" role="dialog" aria-modal="true" aria-labelledby="enMTit">
+  <div class="en-mcab"><div><small id="enMInv"></small><h2 id="enMTit"></h2></div><button type="button" id="enMCerrar" class="en-x" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
+  <div id="enMFotos" class="en-fotos"></div>
+  <dl id="enMInfo" class="en-info"></dl>
+  <div class="en-macc"><button type="button" id="enMCancel" class="en-reg">Cancelar</button><button type="button" id="enMOk" class="en-ok"><i class="bi bi-check2-circle"></i> Entregado</button></div>
+</div></div>
 <script src="js/entrega.js"></script>
+<script src="js/minisebiso-flotante.js"></script>
+<script src="js/asistente-extra.js"></script>
+<script src="js/asistente-ventanas.js"></script>
 </body>
 </html>
