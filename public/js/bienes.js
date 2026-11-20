@@ -4,7 +4,7 @@ const estado = { grupo: "", abierto: null, foto: 0, vista: [], limite: 100 };
 let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
 const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
 let SOLO_EXISTENCIA = false; // usuario que solo consulta y confirma la existencia física (funciona sin internet)
-const GRUPOS_EXISTENCIA = [["", "Todos"], ["Por confirmar", "Por confirmar"], ["Confirmados", "Confirmados"], ["__nuevos", "Registrados"]];
+const GRUPOS_EXISTENCIA = [["", "Todos"], ["Por confirmar", "Por confirmar"], ["Confirmados", "Confirmados"]];
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
@@ -423,16 +423,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-cabeza h1").textContent = "Confirmación de existencia";
     document.querySelector(".b-comp-th").textContent = "Existencia";
     // 2026-11-19: el rol existencia queda solo para consulta (sin confirmar, regresar, cambiar clasificación ni registrar)
-    $("bNuevoForm").addEventListener("submit", guardarNuevo);
-    $("bNuevoCasillas").addEventListener("change", async (e) => {
-      const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";
-      if (!archivo) return;
-      $("bNuevoMsg").textContent = "Preparando foto…";
-      try { nuevoFotos[i] = await reducir(archivo); $("bNuevoMsg").textContent = ""; } catch (x) { $("bNuevoMsg").textContent = "Esa foto no se pudo leer. Tómala otra vez."; }
-      pintarNuevoFotos();
-    });
-    $("bNuevoCampos").addEventListener("change", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
-    $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
   if (respuesta.rol === "comprobar") {
