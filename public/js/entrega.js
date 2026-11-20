@@ -56,8 +56,10 @@ $("enQ").addEventListener("keydown", (e) => {
     tab = b.entregado ? "hecho" : "pend"; document.querySelectorAll(".en-tabs button").forEach(t => t.classList.toggle("on", t.dataset.t === tab));
     foco = b.no_inventario; $("enQ").value = ""; pintar();
     aviso(b.entregado ? `El bien ${b.no_inventario} ya estaba entregado (${b.entregado_en}).` : `Bien ${b.no_inventario} encontrado: presiona «Entregado».`, !b.entregado);
-  } else { aviso(`El No. ${c} no está entre los bienes con existencia confirmada. Revisa que se haya confirmado o registrado.`); pintar(); }
+  } else { $("enQ").value = ""; foco = null; aviso(`El No. ${c} no está entre los bienes con existencia confirmada. Revisa que se haya confirmado o registrado.`); pintar(); }
+  $("enQ").value = "";   // cada pistolazo deja la barra limpia para el siguiente
 });
+$("enQ").addEventListener("focus", () => $("enQ").select());
 $("enQ").addEventListener("input", () => { foco = null; pintar(); });
 $("enLista").addEventListener("click", (e) => { const b = e.target.closest("button[data-inv]"); if (b) marcar(b.dataset.inv, b.dataset.v === "1"); });
 document.querySelectorAll(".en-tabs button").forEach(t => t.addEventListener("click", () => { tab = t.dataset.t; foco = null; document.querySelectorAll(".en-tabs button").forEach(x => x.classList.toggle("on", x === t)); pintar(); $("enQ").focus(); }));
