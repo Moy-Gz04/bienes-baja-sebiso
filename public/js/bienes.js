@@ -49,6 +49,10 @@ function pintarGrupos() {
     return `<button type="button" role="tab" class="b-grupo ${clase(v)}" data-grupo="${esc(v)}" aria-selected="${estado.grupo === v}">
       <span>${t}</span><b>${l.length.toLocaleString("es-MX")}</b><small>${pesos(l.reduce((s, b) => s + (b.moi || 0), 0))}</small></button>`;
   }).join("");
+  // celular: menú desplegable que indica el apartado actual
+  const [v, t] = GRUPOS.find(([v]) => v === estado.grupo) || GRUPOS[0], n = BIENES.filter(b => enGrupoDe(b, v)).length;
+  $("bGrupoActual").innerHTML = `<span><small>Apartado</small><b>${t}</b></span><em>${n.toLocaleString("es-MX")}</em><i class="bi bi-chevron-down"></i>`;
+  $("bGrupoActual").className = `b-grupo-actual ${clase(v)}`;
 }
 
 function comprobacion(b) {
@@ -448,8 +452,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   pintarGrupos();
   $("bGrupos").addEventListener("click", (e) => {
     const g = e.target.closest(".b-grupo"); if (!g) return;
-    estado.grupo = g.dataset.grupo; estado.limite = 100; pintarGrupos(); pintar();
+    estado.grupo = g.dataset.grupo; estado.limite = 100; menuGrupos(false); pintarGrupos(); pintar();
   });
+  const menuGrupos = (abrir) => { document.body.classList.toggle("grupos-abiertos", abrir); $("bGrupoActual").setAttribute("aria-expanded", String(abrir)); };
+  $("bGrupoActual").hidden = false;
+  $("bGrupoActual").addEventListener("click", () => menuGrupos(!document.body.classList.contains("grupos-abiertos")));
   let esperaBuscar;
   const refiltrar = () => { estado.limite = 100; pintar(); };
   $("bBuscar").addEventListener("input", () => { clearTimeout(esperaBuscar); esperaBuscar = setTimeout(refiltrar, 150); });

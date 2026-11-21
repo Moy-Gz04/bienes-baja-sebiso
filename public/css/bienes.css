@@ -409,3 +409,22 @@ body.solo-existencia .b-grupos{ grid-template-columns:repeat(5,minmax(0,1fr)); }
   body.solo-existencia #bNuevo{ flex:1; justify-content:center; padding:12px; font-size:14px; }
   body.solo-existencia .tv-cabeza{ flex-wrap:wrap; gap:8px; }
 }
+
+/* 2026-11-20 celular: los apartados van en un menú desplegable que muestra en cuál se está */
+.b-grupo-actual{ display:none; }
+@media (max-width:900px){
+  .b-grupo-actual{ display:flex; align-items:center; gap:10px; width:100%; margin:0 0 8px; padding:10px 14px; border:1px solid var(--borde); border-left:4px solid var(--g); border-radius:12px; background:#fff; color:var(--g); font-family:'Montserrat',sans-serif; text-align:left; cursor:pointer; }
+  .b-grupo-actual > span{ flex:1; display:flex; flex-direction:column; min-width:0; }
+  .b-grupo-actual small{ font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--txt2); }
+  .b-grupo-actual b{ font-size:15px; }
+  .b-grupo-actual em{ font-style:normal; font-weight:800; font-size:16px; }
+  .b-grupo-actual i{ transition:transform .2s; }
+  body.grupos-abiertos .b-grupo-actual i{ transform:rotate(180deg); }
+  .b-grupos, body.solo-existencia .b-grupos{ display:none !important; }
+  body.grupos-abiertos .b-grupos, body.grupos-abiertos.solo-existencia .b-grupos{ display:flex !important; flex-direction:column; gap:4px; margin:-4px 0 10px; }
+  body.grupos-abiertos .b-grupo{ display:flex !important; flex-direction:row !important; align-items:center; justify-content:space-between; grid-column:auto !important; min-height:46px; padding:8px 14px !important; }
+  body.grupos-abiertos .b-grupo span{ font-size:13px !important; flex:1; }
+  body.grupos-abiertos .b-grupo b{ font-size:15px !important; }
+  body.grupos-abiertos .b-grupo small{ display:none !important; }
+  body.grupos-abiertos .b-grupo[aria-selected="true"]{ outline:2px solid var(--g); }
+}
