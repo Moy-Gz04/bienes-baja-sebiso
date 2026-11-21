@@ -91,11 +91,15 @@ function pintar() {
   const q = norm($("muBuscar").value).split(/\s+/).filter(Boolean);
   const lista = REGISTROS.filter(r => { const i = norm([r.no_inventario, r.descripcion, r.serie, r.persona, r.cargo, r.unidad].join(" ")); return q.every(t => i.includes(t)); });
   $("muResumen").innerHTML = `<div><b>${REGISTROS.length}</b>capturados</div><div><b>${new Set(REGISTROS.map(r => norm(r.persona))).size}</b>personas</div>`;
-  $("muLista").innerHTML = lista.length ? lista.map(r => `<article class="mu-card">
-    <h3>${esc(r.no_inventario)}${r.unidad && Object.keys(UNIDADES).length > 1 ? ` <small>UP ${esc(r.unidad)}</small>` : ""}</h3><p class="d">${esc(r.descripcion)}</p><p>Serie: ${esc(r.serie || "S/S")}</p>
+  const grupos = new Map();
+  [...lista].sort((a, b) => String(a.unidad || "").localeCompare(String(b.unidad || ""), "es", { numeric: true }) || String(a.no_inventario).localeCompare(String(b.no_inventario), "es", { numeric: true }))
+    .forEach(r => { const k = r.unidad || ""; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(r); });
+  const tarjeta = r => `<article class="mu-card">
+    <h3>${esc(r.no_inventario)}</h3><p class="d" title="${esc(r.descripcion)}">${esc(r.descripcion)}</p><p>Serie: ${esc(r.serie || "S/S")}</p>
     <p><i class="bi bi-person"></i> ${esc(r.persona)} · ${esc(r.cargo)}</p>
     <div class="mu-fotos">${["frente", "lado", "etiqueta"].map(k => `<img src="${esc(r.fotos[k])}" alt="Foto ${k}" loading="lazy" data-ver="${esc(r.fotos[k])}">`).join("")}</div>
-    <div class="mu-pie"><span>${esc(r.quien)} · ${esc(r.cuando)}</span><button type="button" class="mu-borrar" data-id="${r.id}">Borrar</button></div></article>`).join("")
+    <div class="mu-pie"><span>${esc(r.quien)} · ${esc(r.cuando)}</span><button type="button" class="mu-borrar" data-id="${r.id}">Borrar</button></div></article>`;
+  $("muLista").innerHTML = lista.length ? [...grupos].map(([up, rs]) => `<h2 class="mu-grupo">${up ? "UP " + esc(up) + (UNIDADES[up] ? ` <span>${esc(typeof UNIDADES[up] === "string" ? UNIDADES[up] : UNIDADES[up].nombre || "")}</span>` : "") : "Sin UP"}<small>${rs.length} bien${rs.length === 1 ? "" : "es"}</small></h2>${rs.map(tarjeta).join("")}`).join("")
     : `<p class="mu-vacio">${REGISTROS.length ? "Nada coincide con la búsqueda." : "Todavía no hay bienes capturados."}</p>`;
 }
 $("muBuscar").addEventListener("input", pintar);

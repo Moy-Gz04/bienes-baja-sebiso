@@ -319,7 +319,7 @@ app.post("/api/nuevo", sesion, async (req, res) => {
     const [enLista] = await sql`SELECT COALESCE(e.clasificacion, b.clasificacion) AS c FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) WHERE x.no_inventario = ${inv}`;
     if (enLista) return res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya existe en la lista de los 1,073 bienes, con estatus ${enLista.c}.` });
     const [ya] = await sql`SELECT registro_op FROM bienes_nuevos WHERE no_inventario = ${inv}`;
-    if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya fue agregado antes a la lista de nuevos.` });
+    if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya fue agregado antes a Bienes sin inventario.` });
     const fotos = (Array.isArray(req.body?.fotos) ? req.body.fotos : []).filter(Boolean).slice(0, 3);
     if (fotos.length < 3) return res.status(400).json({ ok: false, mensaje: "Faltan fotos: se necesitan las 3." });
     const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });

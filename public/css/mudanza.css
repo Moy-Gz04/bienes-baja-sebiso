@@ -42,3 +42,10 @@
 .mu-campos select.mal{ border-color:#C0392B; }
 .mu-card h3 small{ margin-left:4px; padding:1px 6px; border-radius:99px; background:var(--suave); color:var(--txt2); font-size:10px; }
 .mu-campos label[hidden], .mu-unidad[hidden]{ display:none !important; }
+/* agrupado por UP */
+.mu-grupo{ grid-column:1 / -1; display:flex; align-items:baseline; gap:8px; margin:12px 0 2px; padding:6px 10px; border-left:4px solid var(--g); border-radius:6px; background:var(--suave); font-size:14px; font-weight:800; color:var(--g); }
+.mu-grupo:first-child{ margin-top:0; }
+.mu-grupo span{ font-weight:600; font-size:12px; color:var(--txt2); }
+.mu-grupo small{ margin-left:auto; font-size:11px; font-weight:700; color:var(--txt2); }
+.mu-lista{ align-items:stretch; }
+.mu-card p.d{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
