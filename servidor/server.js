@@ -167,7 +167,7 @@ app.get("/api/bienes", sesion, async (req, res) => {
         const [quien, cuando] = b.existencia.split("|");
         return { ...x, nuevo: !!b.registrado_por, registrado_en: b.registrado_en ? new Date(b.registrado_en).toISOString() : null, clasificacion_bien: b.clasificacion, existencia: { quien, cuando }, clasificacion: b.clasificacion, puede_capturar_fotos: false, avisos: [], filas: [] };
       }).concat(agregados.map(({ foto_ids, quien, cuando, registro_op, ...a }) => ({ ...a, moi: 0, independiente: true, registrado_por: quien, registrado_en: new Date(cuando).toISOString(),
-        fotos: (foto_ids || []).map(id => `https://lh3.googleusercontent.com/d/${id}=w1400`), clasificacion_bien: a.clasificacion, existencia: null, tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] }))) });
+        fotos: (foto_ids || []).map(id => `https://lh3.googleusercontent.com/d/${id}=w1400`), clasificacion_bien: a.clasificacion, existencia: null, tiene_pdf: true, puede_capturar_fotos: false, avisos: [], filas: [] }))) });
     }
     if (req.soloComprobar) {
       const grupo = (k) => !k ? "Por comprobar" : k.valor ? "Comprobado" : "No comprobado";
@@ -701,7 +701,12 @@ async function bajarImagen(url) {
 const FRONT_PUBLICO = "https://bienes-baja-sebiso.netlify.app/";
 async function armarFicha(inv) {
   const [b] = await sql`SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, fc.datos AS fc_datos FROM bienes b LEFT JOIN ficha_capturas fc USING (no_inventario) WHERE b.no_inventario = ${inv}`;
-  if (!b) throw new Error("El bien no existe");
+  if (!b) {   // Bienes sin inventario (tabla bienes_nuevos): ficha armada al momento con sus datos y sus 3 fotos de Drive
+    const [n] = await sql`SELECT * FROM bienes_nuevos WHERE no_inventario = ${inv}`;
+    if (!n) throw new Error("El bien no existe");
+    const fotos = await Promise.all((n.foto_ids || []).map(id => bajarImagen(urlDrive(id)).catch(e => { console.error(e.message); return null; })));
+    return { pdf: await fichaPdf({ ...n, padron: "Bienes sin inventario", estatus_contable: "M" }, fotos), fotos };
+  }
   const bien = { ...b, ...(b.fc_datos || {}) };
   const origen = await sql`SELECT COALESCE('https://lh3.googleusercontent.com/d/' || d.drive_id || '=w1400', ${FRONT_PUBLICO} || f.ruta) AS url FROM fotos f
     LEFT JOIN fotos_drive d ON d.nombre = substring(f.ruta from '[^/]+$') WHERE f.no_inventario = ${inv} ORDER BY f.orden LIMIT 3`;
@@ -785,7 +790,7 @@ app.get("/api/ficha/:inv/pdf", async (req, res) => {
   };
   try {
     const [p] = await sql`SELECT ficha_pendiente, pdf_drive_id FROM bienes WHERE no_inventario = ${t.inv}`;
-    if (p && p.ficha_pendiente) {   // aún no se resube a Drive: se arma al momento con los datos vigentes
+    if (!p || p.ficha_pendiente) {   // Bienes sin inventario, o aún no se resube a Drive: se arma al momento con los datos vigentes
       const c = cachePdf.get(t.inv);
       if (c && c.hasta > Date.now()) return enviar(c.bytes);
       const { pdf } = await armarFicha(t.inv);
