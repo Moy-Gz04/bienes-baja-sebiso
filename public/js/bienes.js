@@ -436,7 +436,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       try { nuevoFotos[i] = await reducir(archivo); $("bNuevoMsg").textContent = ""; } catch (x) { $("bNuevoMsg").textContent = "Esa foto no se pudo leer. Tómala otra vez."; }
       pintarNuevoFotos();
     });
-    $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); if (e.target.name === "no_inventario") avisoYaExiste(); });
+    $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     $("bNuevoCampos").addEventListener("change", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
@@ -699,19 +699,12 @@ function abrirNuevo() {
   $("bNuevoCampos").querySelectorAll("[required]").forEach(i => i.closest("label").classList.add("falta"));
   $("bNuevoMsg").textContent = ""; $("bNuevoGuardar").disabled = false;
   abrir($("bNuevoDlg"));
-  setTimeout(() => $("bNuevoForm").no_inventario.focus(), 50);
-}
-// Avisa si el No. ya está en los 1,073 (con su estatus) o ya se agregó a Bienes sin inventario
-function avisoYaExiste() {
-  const inv = $("bNuevoForm").no_inventario.value.replace(/\s+/g, ""), b = inv && BIENES.find(x => x.no_inventario === inv);
-  const m = !b ? "" : b.independiente ? `El No. ${inv} ya fue agregado a Bienes sin inventario.` : `El No. ${inv} ya existe en la lista de los 1,073 bienes, con estatus ${b.clasificacion_bien}.`;
-  $("bNuevoMsg").textContent = m; $("bNuevoMsg").classList.toggle("b-ya", !!m);
-  return !!m;
+  setTimeout(() => $("bNuevoForm").descripcion.focus(), 50);
 }
 function agregarNuevoLocal(op) {
   const d = op.datos;
-  if (BIENES.some(x => x.no_inventario === d.no_inventario)) return;
-  const b = { ...d, moi: 0, independiente: true, registrado_por: yo(), registrado_en: op.cuando, clasificacion_bien: "Baja definitiva", fotos: (op.fotos || []).filter(Boolean),
+  if (BIENES.some(x => x.opId === op.opId)) return;
+  const b = { ...d, opId: op.opId, no_inventario: "Por asignar", moi: 0, independiente: true, registrado_por: yo(), registrado_en: op.cuando, clasificacion_bien: "Baja definitiva", fotos: (op.fotos || []).filter(Boolean),
     existencia: null, clasificacion: "Baja definitiva", tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] };
   b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.adscripcion, b.unidad_presupuestal, b.ubicacion, b.material, b.color, b.caracteristicas].join(" "));
   BIENES.push(b);
@@ -720,22 +713,19 @@ async function guardarNuevo(e) {
   e.preventDefault();
   const f = $("bNuevoForm"), datos = {};
   [...f.elements].forEach(el => { if (el.name && el.type !== "file") datos[el.name] = el.value.trim(); });
-  datos.no_inventario = datos.no_inventario.replace(/\s+/g, "");
-  if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(datos.no_inventario)) { $("bNuevoMsg").textContent = "Escribe el No. de inventario."; f.no_inventario.focus(); return; }
   if (!datos.descripcion) { $("bNuevoMsg").textContent = "Falta la descripción."; f.descripcion.focus(); return; }
   datos.clasificacion = "Baja definitiva";
-  if (avisoYaExiste()) { f.no_inventario.focus(); return; }
   if (!datos.estado_fisico) { $("bNuevoMsg").textContent = "Elige el estado físico."; f.estado_fisico.focus(); return; }
   const n = nuevoFotos.filter(Boolean).length;
   if (n < 3) { const fal = nuevoFotos.map((x, i) => x ? null : TOMAS[i]).filter(Boolean); $("bNuevoMsg").textContent = `Faltan fotos: ${fal.join(", ")}. Se necesitan las 3.`; return; }
-  const M = window.MiniSEBISO, pregunta = `¿Registro el bien ${datos.no_inventario}?`;
+  const M = window.MiniSEBISO, pregunta = `¿Agrego este bien sin inventario?`;
   const detalle = `${datos.descripcion} · 3 fotos · Baja definitiva (Bienes sin inventario)`;
   const si = M && M.preguntar && !M.apagado
     ? await M.preguntar({ titulo: "Registrar bien", pregunta, detalle, btnOk: "Sí, registrarlo", iconoOk: "ti-plus", textoOk: "Lo registro…", estiloOk: "dorado", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Sigue editando." })
     : confirm(pregunta);
   if (!si) return;
   $("bNuevoGuardar").disabled = true;
-  const op = { tipo: "nuevo", no_inventario: datos.no_inventario, datos, fotos: nuevoFotos.filter(Boolean), cuando: new Date().toISOString(), opId: uid() };
+  const op = { tipo: "nuevo", no_inventario: "Por asignar", datos, fotos: nuevoFotos.filter(Boolean), cuando: new Date().toISOString(), opId: uid() };
   try { await tx("cola", "readwrite", s => s.add(op)); } catch (x) { $("bNuevoMsg").textContent = "No se pudo guardar en este equipo. Intenta de nuevo."; $("bNuevoGuardar").disabled = false; return; }
   agregarNuevoLocal(op); await guardarCopia();
   cerrar($("bNuevoDlg"));

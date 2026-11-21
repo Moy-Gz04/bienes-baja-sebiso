@@ -129,9 +129,9 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
     <button type="button" class="b-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
     <form id="bNuevoForm" novalidate>
       <div class="b-pdf-cabeza"><h2 id="bNuevoTitulo">Agregar bien nuevo</h2></div>
-      <p class="b-datos-ayuda">El No. de inventario, la descripción, el estado físico y las 3 fotos son obligatorios. Queda como <b>Baja definitiva</b> en Bienes sin inventario, aparte de los 1,073.</p>
+      <p class="b-datos-ayuda">No lleva No. de inventario: el sistema le asigna un consecutivo (SI-0001, SI-0002…) que sale en la ficha. La descripción, el estado físico y las 3 fotos son obligatorios. Queda como <b>Baja definitiva</b> en Bienes sin inventario, aparte de los 1,073.</p>
       <div class="b-campos" id="bNuevoCampos">
-        <label class="falta"><span>No. de inventario *</span><input name="no_inventario" inputmode="numeric" maxlength="40" required autocomplete="off"></label>
+        <label><span>No. (consecutivo)</span><input value="Se asigna al guardar" disabled></label>
         <label class="a2 falta"><span>Descripción *</span><input name="descripcion" maxlength="300" required></label>
         <label><span>Marca</span><input name="marca" maxlength="120"></label>
         <label><span>Modelo</span><input name="modelo" maxlength="120"></label>

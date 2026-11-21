@@ -57,7 +57,8 @@ sql`CREATE TABLE IF NOT EXISTS existencias (
 sql`CREATE TABLE IF NOT EXISTS bienes_nuevos (
   no_inventario TEXT PRIMARY KEY, descripcion TEXT, marca TEXT, modelo TEXT, serie TEXT, material TEXT, color TEXT, ubicacion TEXT, unidad_presupuestal TEXT, adscripcion TEXT,
   estado_fisico TEXT, caracteristicas TEXT, clasificacion TEXT NOT NULL DEFAULT 'Baja definitiva', foto_ids TEXT[] NOT NULL DEFAULT '{}',
-  quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), registro_op TEXT)`.catch(e => console.error("bienes_nuevos:", e.message));
+  quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), registro_op TEXT)`.then(() => sql`CREATE SEQUENCE IF NOT EXISTS bienes_nuevos_consecutivo`).catch(e => console.error("bienes_nuevos:", e.message));
+// Bienes sin inventario: el sistema les asigna un consecutivo SI-0001, SI-0002… (va como No. de inventario en la ficha)
 
 // Fichas escaneadas con firma: si bienes.pdf_drive_id coincide con drive_id, la ficha vigente es la firmada
 // ficha_pendiente: la ficha de Drive quedó vieja; mientras se resube, el sistema la arma al momento desde la BD
@@ -117,7 +118,7 @@ function sesion(req, res, next) {
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
     // rol "existencia": solo consulta bienes, ve su ficha y confirma su existencia (trabaja sin internet: sesión de 30 días)
     req.soloExistencia = req.usuario.rol === "existencia";
-    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path)))
+    if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/[A-Za-z0-9-]+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     // rol "entrega": solo su mini sistema
     if (req.usuario.rol === "entrega" && !(req.path === "/api/entregas" || req.path === "/api/entrega" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Entrega." });
@@ -311,21 +312,18 @@ app.post("/api/nuevo", sesion, async (req, res) => {
   try {
     const d = req.body?.datos || {}, opId = String(req.body?.opId || "").slice(0, 80);
     const t = (k, max = 300) => String(d[k] ?? "").trim().slice(0, max) || null;
-    const inv = String(d.no_inventario || "").trim().replace(/\s+/g, "");
-    if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(inv)) return res.status(400).json({ ok: false, mensaje: "Escribe un No. de inventario válido." });
     if (!t("descripcion")) return res.status(400).json({ ok: false, mensaje: "Falta la descripción." });
     if (!["Bueno", "Regular", "Malo", "Inservible"].includes(t("estado_fisico", 40))) return res.status(400).json({ ok: false, mensaje: "Falta el estado físico." });
-    // 2026-11-20: los nuevos van a la lista independiente bienes_nuevos, siempre como Baja definitiva
-    const [enLista] = await sql`SELECT COALESCE(e.clasificacion, b.clasificacion) AS c FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) WHERE x.no_inventario = ${inv}`;
-    if (enLista) return res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya existe en la lista de los 1,073 bienes, con estatus ${enLista.c}.` });
-    const [ya] = await sql`SELECT registro_op FROM bienes_nuevos WHERE no_inventario = ${inv}`;
-    if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya fue agregado antes a Bienes sin inventario.` });
+    // 2026-11-21: sin No. de inventario; el consecutivo se asigna al guardar. Reintento sin internet (mismo opId) = ok
+    if (opId) { const [ya] = await sql`SELECT no_inventario FROM bienes_nuevos WHERE registro_op = ${opId}`; if (ya) return res.json({ ok: true, repetido: true, no_inventario: ya.no_inventario }); }
     const fotos = (Array.isArray(req.body?.fotos) ? req.body.fotos : []).filter(Boolean).slice(0, 3);
     if (fotos.length < 3) return res.status(400).json({ ok: false, mensaje: "Faltan fotos: se necesitan las 3." });
     const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });
     if (bytes.some(x => !x || x.length < 2000 || x.length > 4 * 1024 * 1024 || x[0] !== 0xff || x[1] !== 0xd8)) return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida." });
     const quien = req.usuario.usuario || "—";
     const ids = bytes.length ? await subirFotosDrive(bytes) : [];
+    const [{ n }] = await sql`SELECT nextval('bienes_nuevos_consecutivo') AS n`;
+    const inv = "SI-" + String(n).padStart(4, "0");
     await sql`INSERT INTO bienes_nuevos (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, foto_ids, quien, registro_op)
       VALUES (${inv}, ${t("descripcion")}, ${t("marca")}, ${t("modelo")}, ${t("serie")}, ${t("material")}, ${t("color")}, ${t("ubicacion")}, ${t("unidad_presupuestal")}, ${t("adscripcion")}, ${t("estado_fisico", 40)}, ${t("caracteristicas", 1000)},
         ${ids}, ${quien}, ${opId || null})`;
@@ -741,8 +739,8 @@ app.get("/api/foto/:inv/:orden", async (req, res) => {
 // ── Ficha técnica en PDF. Paso 1 (con sesión): un enlace que dura 5 min. Paso 2: el PDF, pedido a Drive y guardado un rato en memoria.
 app.get("/api/ficha/:inv/enlace", sesion, (req, res) => {
   if (req.soloCaptura) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo captura fotos." });
-  const inv = String(req.params.inv).replace(/\D/g, "");
-  res.json({ ok: true, url: `/api/ficha/${inv}/pdf?t=${jwt.sign({ proposito: "ficha", inv }, SECRETO, { expiresIn: "5m" })}` });
+  const inv = String(req.params.inv).replace(/[^A-Za-z0-9-]/g, "");
+  res.json({ ok: true, url: `/api/ficha/${encodeURIComponent(inv)}/pdf?t=${jwt.sign({ proposito: "ficha", inv }, SECRETO, { expiresIn: "5m" })}` });
 });
 
 const cachePdf = new Map();   // inv -> { bytes, hasta }
