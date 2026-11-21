@@ -4,7 +4,7 @@ const estado = { grupo: "", abierto: null, foto: 0, vista: [], limite: 100 };
 let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
 const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
 let SOLO_EXISTENCIA = false; // usuario que solo consulta y confirma la existencia física (funciona sin internet)
-const GRUPOS_EXISTENCIA = [["", "Todos"], ["Por confirmar", "Por confirmar"], ["Confirmados", "Confirmados"]];
+const GRUPOS_EXISTENCIA = [["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"], ["__nuevos", "Registrados"], ["__agregados", "Nuevos agregados"]];
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
 let GRUPOS = [
   ["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"],
@@ -17,7 +17,7 @@ const norm = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toU
 const pesos = (n) => n ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—";
 const fecha = (f) => f ? new Date(f + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
 const sinArea = (t) => String(t || "").replace(/^\d+\s*-\s*/, "");
-const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja", "Por confirmar": "dif", "Confirmados": "reap", "__nuevos": "capt" }[c] || "");
+const clase = (c) => ({ "Baja definitiva": "baja", "Para reaprovechamiento": "reap", "Propuesta DIF": "dif", "Pendiente de estatus": "pend", "Fuera del padrón": "foto", "__sinfotos": "sinf", "__capturar": "capt", "Faltan fotos": "baja", "Fotos tomadas": "reap", "Por comprobar": "dif", "Comprobado": "reap", "No comprobado": "baja", "Por confirmar": "dif", "Confirmados": "reap", "__nuevos": "capt", "__agregados": "dif" }[c] || "");
 const estadoDe = (b) => b.estado_fisico || b.estado_ficha || b.condicion_foto || "";
 // Datos que se revisan para el apartado "Capturar datos"
 const DATOS_CLAVE = [["marca", "marca"], ["modelo", "modelo"], ["serie", "serie"], ["material", "material"], ["color", "color"], ["adscripcion", "adscripción"],
@@ -29,7 +29,7 @@ function faltantes(b) {
   return f;
 }
 const porCapturar = (b) => { if (b.captura_omitida || b.fotos.length) return false; const f = faltantes(b); return f.includes("estado") || f.includes("ubicación") || f.length >= 5; };
-const enGrupoDe = (b, g) => !g || (g === "__nuevos" ? !!b.nuevo : g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
+const enGrupoDe = (b, g) => SOLO_EXISTENCIA && (g === "__agregados") !== !!b.independiente ? false : !g || (g === "__agregados" ? true : g === "__nuevos" ? !!b.nuevo : g === "__sinfotos" ? !b.fotos.length : g === "__capturar" ? porCapturar(b) : b.clasificacion === g);
 
 function filtrados() {
   const terminos = norm($("bBuscar").value).split(/\s+/).filter(Boolean);
@@ -130,9 +130,9 @@ const valor = (b, c) => (typeof c === "function" ? c(b) : b[c]) || "";
 
 const DATOS_EXISTENCIA = [["No. inventario", "no_inventario"], ["Clave armonizada", "clave_armonizada"], ["COG", "cog"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"],
   ["Material", "material"], ["Color", "color"], ["Ubicación", (b) => b.ubicacion || b.edificio], ["M.O.I.", (b) => pesos(b.moi)], ["Fecha de adquisición", (b) => fecha(b.fecha_adquisicion)],
-  ["Estado físico", (b) => estadoDe(b)], ["Clasificación", "clasificacion_bien"], ["Existencia", (b) => b.existencia ? "Confirmada · " + b.existencia.quien + " · " + b.existencia.cuando : "Por confirmar"],
+  ["Estado físico", (b) => estadoDe(b)], ["Clasificación", "clasificacion_bien"], ["Existencia", (b) => b.existencia ? "Confirmada · " + b.existencia.quien + " · " + b.existencia.cuando : b.independiente ? "Nuevo agregado (lista aparte)" : "Por confirmar"],
   ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"], ["Folio fiscal", "folio_fiscal"],
-  ["Registrado en el sistema", (b) => b.nuevo ? [b.registrado_por || yo(), b.registrado_en ? horaLocal(b.registrado_en) : ""].filter(Boolean).join(" · ") : "", 2]];
+  ["Registrado en el sistema", (b) => b.nuevo || b.independiente ? [b.registrado_por || yo(), b.registrado_en ? horaLocal(b.registrado_en) : ""].filter(Boolean).join(" · ") : "", 2]];
 const DATOS_CAPTURA = [["No. inventario", "no_inventario"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"], ["Material", "material"], ["Color", "color"],
   ["Ubicación", (b) => b.ubicacion || b.edificio, 3], ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"]];
 
@@ -264,7 +264,7 @@ function verFicha(inv) {
   if (estado.abierto !== b) { captura.fotos = [null, null, null]; captura.rehacer = false; $("bCapMsg").textContent = ""; }
   estado.abierto = b; estado.foto = 0;
   $("bTitulo").textContent = b.descripcion || `Bien ${b.no_inventario}`;
-  $("bChips").innerHTML = `<span class="b-pill ${clase(clasDe(b))}">${esc(clasDe(b))}</span>${SOLO_EXISTENCIA ? `<span class="b-pill ${clase(b.clasificacion)}">${b.existencia ? "Existencia confirmada" : "Por confirmar"}</span>` : ""}<span class="b-inv">No. ${esc(b.no_inventario)}</span>`
+  $("bChips").innerHTML = `<span class="b-pill ${clase(clasDe(b))}">${esc(clasDe(b))}</span>${SOLO_EXISTENCIA ? `<span class="b-pill ${b.independiente ? "dif" : "reap"}">${b.independiente ? "Nuevo agregado (lista aparte)" : "Existencia confirmada"}</span>` : ""}<span class="b-inv">No. ${esc(b.no_inventario)}</span>`
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
   $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
@@ -417,12 +417,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-cabeza h1").textContent = "Bienes sin fotos";
   }
   if (respuesta.rol === "existencia") {
-    SOLO_EXISTENCIA = true; GRUPOS = GRUPOS_EXISTENCIA; estado.grupo = "Por confirmar";
+    SOLO_EXISTENCIA = true; GRUPOS = GRUPOS_EXISTENCIA; estado.grupo = "";
     document.body.classList.add("solo-existencia");
     document.querySelector(".tv-eyebrow").textContent = "Inventario de bienes";
-    document.querySelector(".tv-cabeza h1").textContent = "Confirmación de existencia";
+    document.querySelector(".tv-cabeza h1").textContent = "Bienes con existencia";
     document.querySelector(".b-comp-th").textContent = "Existencia";
-    // 2026-11-19: el rol existencia queda solo para consulta (sin confirmar, regresar, cambiar clasificación ni registrar)
+    // 2026-11-20: consulta de los 1,073 + "Agregar bien nuevo" (lista independiente, siempre Baja definitiva)
+    $("bNuevo").hidden = false; $("bNuevo").addEventListener("click", abrirNuevo);
+    $("bNuevoForm").addEventListener("submit", guardarNuevo);
+    $("bNuevoCasillas").addEventListener("change", async (e) => {
+      const i = +e.target.dataset.i, archivo = e.target.files && e.target.files[0]; e.target.value = "";
+      if (!archivo) return;
+      $("bNuevoMsg").textContent = "Preparando foto…";
+      try { nuevoFotos[i] = await reducir(archivo); $("bNuevoMsg").textContent = ""; } catch (x) { $("bNuevoMsg").textContent = "Esa foto no se pudo leer. Tómala otra vez."; }
+      pintarNuevoFotos();
+    });
+    $("bNuevoCampos").addEventListener("input", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); if (e.target.name === "no_inventario") avisoYaExiste(); });
+    $("bNuevoCampos").addEventListener("change", (e) => { const l = e.target.closest("label"); if (l && e.target.required) l.classList.toggle("falta", !e.target.value.trim()); });
     aplicarCola(await tx("cola", "readonly", s => s.getAll()).catch(() => []));
   }
   if (respuesta.rol === "comprobar") {
@@ -633,6 +644,7 @@ async function recargarDatos() {
 }
 
 function botonExistencia(b) {
+  if (b.independiente) return `<span class="b-exist-pend" title="${esc(b.registrado_por || "")}"><i class="bi bi-plus-circle"></i> Nuevo agregado</span>`;
   if (!b.existencia) return `<span class="b-exist-pend"><i class="bi bi-hourglass-split"></i> Por confirmar</span>`;
   return `<span class="b-exist-ok" title="${esc(b.existencia.quien)} · ${esc(b.existencia.cuando)}"><i class="bi bi-patch-check-fill"></i> Confirmado<small>${esc(b.existencia.cuando)}</small></span>`;
 }
@@ -682,11 +694,18 @@ function abrirNuevo() {
   abrir($("bNuevoDlg"));
   setTimeout(() => $("bNuevoForm").no_inventario.focus(), 50);
 }
+// Avisa si el No. ya está en los 1,073 (con su estatus) o ya se agregó a la lista de nuevos
+function avisoYaExiste() {
+  const inv = $("bNuevoForm").no_inventario.value.replace(/\s+/g, ""), b = inv && BIENES.find(x => x.no_inventario === inv);
+  const m = !b ? "" : b.independiente ? `El No. ${inv} ya fue agregado a la lista de nuevos.` : `El No. ${inv} ya existe en la lista de los 1,073 bienes, con estatus ${b.clasificacion_bien}.`;
+  $("bNuevoMsg").textContent = m; $("bNuevoMsg").classList.toggle("b-ya", !!m);
+  return !!m;
+}
 function agregarNuevoLocal(op) {
   const d = op.datos;
   if (BIENES.some(x => x.no_inventario === d.no_inventario)) return;
-  const b = { ...d, moi: 0, nuevo: true, registrado_en: op.cuando, clasificacion_bien: d.clasificacion, fotos: (op.fotos || []).filter(Boolean),
-    existencia: { quien: yo(), cuando: horaLocal(op.cuando) }, clasificacion: "Confirmados", tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] };
+  const b = { ...d, moi: 0, independiente: true, registrado_por: yo(), registrado_en: op.cuando, clasificacion_bien: "Baja definitiva", fotos: (op.fotos || []).filter(Boolean),
+    existencia: null, clasificacion: "Baja definitiva", tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] };
   b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.adscripcion, b.unidad_presupuestal, b.ubicacion, b.material, b.color, b.caracteristicas].join(" "));
   BIENES.push(b);
 }
@@ -697,12 +716,13 @@ async function guardarNuevo(e) {
   datos.no_inventario = datos.no_inventario.replace(/\s+/g, "");
   if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(datos.no_inventario)) { $("bNuevoMsg").textContent = "Escribe el No. de inventario."; f.no_inventario.focus(); return; }
   if (!datos.descripcion) { $("bNuevoMsg").textContent = "Falta la descripción."; f.descripcion.focus(); return; }
-  if (BIENES.some(x => x.no_inventario === datos.no_inventario)) { $("bNuevoMsg").textContent = `El No. ${datos.no_inventario} ya está en la lista.`; f.no_inventario.focus(); return; }
+  datos.clasificacion = "Baja definitiva";
+  if (avisoYaExiste()) { f.no_inventario.focus(); return; }
   if (!datos.estado_fisico) { $("bNuevoMsg").textContent = "Elige el estado físico."; f.estado_fisico.focus(); return; }
   const n = nuevoFotos.filter(Boolean).length;
   if (n < 3) { const fal = nuevoFotos.map((x, i) => x ? null : TOMAS[i]).filter(Boolean); $("bNuevoMsg").textContent = `Faltan fotos: ${fal.join(", ")}. Se necesitan las 3.`; return; }
   const M = window.MiniSEBISO, pregunta = `¿Registro el bien ${datos.no_inventario}?`;
-  const detalle = `${datos.descripcion} · ${n ? n + (n === 1 ? " foto" : " fotos") : "sin fotos"} · ${datos.clasificacion === "Para reaprovechamiento" ? "Reaprovechamiento" : "Baja definitiva"}`;
+  const detalle = `${datos.descripcion} · 3 fotos · Baja definitiva (lista de nuevos)`;
   const si = M && M.preguntar && !M.apagado
     ? await M.preguntar({ titulo: "Registrar bien", pregunta, detalle, btnOk: "Sí, registrarlo", iconoOk: "ti-plus", textoOk: "Lo registro…", estiloOk: "dorado", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Sigue editando." })
     : confirm(pregunta);
@@ -712,7 +732,7 @@ async function guardarNuevo(e) {
   try { await tx("cola", "readwrite", s => s.add(op)); } catch (x) { $("bNuevoMsg").textContent = "No se pudo guardar en este equipo. Intenta de nuevo."; $("bNuevoGuardar").disabled = false; return; }
   agregarNuevoLocal(op); await guardarCopia();
   cerrar($("bNuevoDlg"));
-  estado.grupo = "__nuevos"; pintarGrupos(); pintar();
+  estado.grupo = "__agregados"; pintarGrupos(); pintar();
   await refrescarSync(); enviarCola();
 }
 let marcando = false;

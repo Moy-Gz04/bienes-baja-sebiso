@@ -53,6 +53,12 @@ sql`CREATE TABLE IF NOT EXISTS existencias (
   no_inventario TEXT PRIMARY KEY REFERENCES bienes ON DELETE CASCADE, quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now())`
   .catch(e => console.error("No se pudo preparar existencias:", e.message));
 
+// Bienes agregados por el rol existencia (2026-11-20): lista independiente, NO se mezcla con los 1,073 confirmados
+sql`CREATE TABLE IF NOT EXISTS bienes_nuevos (
+  no_inventario TEXT PRIMARY KEY, descripcion TEXT, marca TEXT, modelo TEXT, serie TEXT, material TEXT, color TEXT, ubicacion TEXT, unidad_presupuestal TEXT, adscripcion TEXT,
+  estado_fisico TEXT, caracteristicas TEXT, clasificacion TEXT NOT NULL DEFAULT 'Baja definitiva', foto_ids TEXT[] NOT NULL DEFAULT '{}',
+  quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), registro_op TEXT)`.catch(e => console.error("bienes_nuevos:", e.message));
+
 // Fichas escaneadas con firma: si bienes.pdf_drive_id coincide con drive_id, la ficha vigente es la firmada
 // ficha_pendiente: la ficha de Drive quedó vieja; mientras se resube, el sistema la arma al momento desde la BD
 sql`ALTER TABLE bienes ADD COLUMN IF NOT EXISTS ficha_pendiente BOOLEAN NOT NULL DEFAULT false`.catch(e => console.error("ficha_pendiente:", e.message));
@@ -154,11 +160,14 @@ app.get("/api/bienes", sesion, async (req, res) => {
     if (req.soloExistencia) {
       const CAMPOS = ["no_inventario", "descripcion", "marca", "modelo", "serie", "material", "color", "ubicacion", "edificio", "unidad_presupuestal", "adscripcion", "organo_superior",
         "clave_armonizada", "cog", "moi", "fecha_adquisicion", "estado_fisico", "estado_ficha", "condicion_foto", "caracteristicas", "folio_fiscal", "propuesta_dif", "fotos", "tiene_pdf", "ficha", "clasificacion", "registrado_por"];
-      return res.json({ ok: true, rol: "existencia", bienes: bienes.map(b => {
+      // 2026-11-20: solo los 1,073 con existencia confirmada + la lista independiente de agregados
+      const agregados = await sql`SELECT * FROM bienes_nuevos ORDER BY cuando DESC`;
+      return res.json({ ok: true, rol: "existencia", bienes: bienes.filter(b => b.existencia).map(b => {
         const x = Object.fromEntries(CAMPOS.map(k => [k, b[k]]));
-        const [quien, cuando] = b.existencia ? b.existencia.split("|") : [];
-        return { ...x, nuevo: !!b.registrado_por, registrado_en: b.registrado_en ? new Date(b.registrado_en).toISOString() : null, clasificacion_bien: b.clasificacion, existencia: b.existencia ? { quien, cuando } : null, clasificacion: b.existencia ? "Confirmados" : "Por confirmar", puede_capturar_fotos: false, avisos: [], filas: [] };
-      }) });
+        const [quien, cuando] = b.existencia.split("|");
+        return { ...x, nuevo: !!b.registrado_por, registrado_en: b.registrado_en ? new Date(b.registrado_en).toISOString() : null, clasificacion_bien: b.clasificacion, existencia: { quien, cuando }, clasificacion: b.clasificacion, puede_capturar_fotos: false, avisos: [], filas: [] };
+      }).concat(agregados.map(({ foto_ids, quien, cuando, registro_op, ...a }) => ({ ...a, moi: 0, independiente: true, registrado_por: quien, registrado_en: new Date(cuando).toISOString(),
+        fotos: (foto_ids || []).map(id => `https://lh3.googleusercontent.com/d/${id}=w1400`), clasificacion_bien: a.clasificacion, existencia: null, tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] }))) });
     }
     if (req.soloComprobar) {
       const grupo = (k) => !k ? "Por comprobar" : k.valor ? "Comprobado" : "No comprobado";
@@ -306,23 +315,20 @@ app.post("/api/nuevo", sesion, async (req, res) => {
     if (!/^[A-Za-z0-9\-\/]{1,40}$/.test(inv)) return res.status(400).json({ ok: false, mensaje: "Escribe un No. de inventario válido." });
     if (!t("descripcion")) return res.status(400).json({ ok: false, mensaje: "Falta la descripción." });
     if (!["Bueno", "Regular", "Malo", "Inservible"].includes(t("estado_fisico", 40))) return res.status(400).json({ ok: false, mensaje: "Falta el estado físico." });
-    const clas = CAMBIABLES.includes(d.clasificacion) ? d.clasificacion : "Baja definitiva";
-    const [ya] = await sql`SELECT registro_op FROM bienes WHERE no_inventario = ${inv}`;
-    if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. de inventario ${inv} ya existe en el sistema.` });
+    // 2026-11-20: los nuevos van a la lista independiente bienes_nuevos, siempre como Baja definitiva
+    const [enLista] = await sql`SELECT COALESCE(e.clasificacion, b.clasificacion) AS c FROM existencias x JOIN bienes b USING (no_inventario) LEFT JOIN estatus_capturas e USING (no_inventario) WHERE x.no_inventario = ${inv}`;
+    if (enLista) return res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya existe en la lista de los 1,073 bienes, con estatus ${enLista.c}.` });
+    const [ya] = await sql`SELECT registro_op FROM bienes_nuevos WHERE no_inventario = ${inv}`;
+    if (ya) return ya.registro_op && ya.registro_op === opId ? res.json({ ok: true, repetido: true }) : res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya fue agregado antes a la lista de nuevos.` });
     const fotos = (Array.isArray(req.body?.fotos) ? req.body.fotos : []).filter(Boolean).slice(0, 3);
     if (fotos.length < 3) return res.status(400).json({ ok: false, mensaje: "Faltan fotos: se necesitan las 3." });
     const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });
     if (bytes.some(x => !x || x.length < 2000 || x.length > 4 * 1024 * 1024 || x[0] !== 0xff || x[1] !== 0xd8)) return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida." });
     const quien = req.usuario.usuario || "—";
     const ids = bytes.length ? await subirFotosDrive(bytes) : [];
-    await sql.transaction([
-      sql`INSERT INTO bienes (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, padron, clasificacion, registrado_por, registrado_en, registro_op)
-        VALUES (${inv}, ${t("descripcion")}, ${t("marca")}, ${t("modelo")}, ${t("serie")}, ${t("material")}, ${t("color")}, ${t("ubicacion")}, ${t("unidad_presupuestal")}, ${t("adscripcion")}, ${t("estado_fisico", 40)}, ${t("caracteristicas", 1000)},
-          'Registro en sistema', ${clas}, ${quien}, now(), ${opId || null})`,
-      sql`INSERT INTO existencias (no_inventario, quien) VALUES (${inv}, ${quien}) ON CONFLICT DO NOTHING`,
-      ...ids.map((x, i) => sql`INSERT INTO fotos_capturadas (no_inventario, orden, drive_id, quien) VALUES (${inv}, ${i + 1}, ${x}, ${quien})`),
-    ]);
-    programarFicha(inv);
+    await sql`INSERT INTO bienes_nuevos (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, foto_ids, quien, registro_op)
+      VALUES (${inv}, ${t("descripcion")}, ${t("marca")}, ${t("modelo")}, ${t("serie")}, ${t("material")}, ${t("color")}, ${t("ubicacion")}, ${t("unidad_presupuestal")}, ${t("adscripcion")}, ${t("estado_fisico", 40)}, ${t("caracteristicas", 1000)},
+        ${ids}, ${quien}, ${opId || null})`;
     res.json({ ok: true, no_inventario: inv, fotos: ids.length });
   } catch (e) { fallo(res, e, "No se pudo registrar el bien."); }
 });

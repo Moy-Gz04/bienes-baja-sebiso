@@ -396,3 +396,16 @@ body.solo-existencia .b-grupos{ grid-template-columns:repeat(4,minmax(0,1fr)); }
   body.solo-existencia .tv-cabeza h1{ font-size:19px; line-height:1.15; }
   body.solo-existencia #bNuevo{ flex:none; white-space:nowrap; }
 }
+
+/* 2026-11-20 existencia: 5 filtros (Todos, Baja, Reaprovechamiento, Registrados, Nuevos agregados) y botón Agregar bien nuevo */
+body.solo-existencia .b-grupos{ grid-template-columns:repeat(5,minmax(0,1fr)); }
+#bNuevoMsg.b-ya{ color:#a3123a; font-weight:700; }
+@media (max-width:900px){
+  body.solo-existencia .b-grupos{ grid-template-columns:repeat(6,minmax(0,1fr)); gap:6px; }
+  body.solo-existencia .b-grupo{ grid-column:span 2; min-height:52px; }
+  body.solo-existencia .b-grupo:nth-child(n+4){ grid-column:span 3; }
+  body.solo-existencia .b-grupo span{ font-size:11px; }
+  body.solo-existencia .b-cabeza-der{ width:100%; }
+  body.solo-existencia #bNuevo{ flex:1; justify-content:center; padding:12px; font-size:14px; }
+  body.solo-existencia .tv-cabeza{ flex-wrap:wrap; gap:8px; }
+}
