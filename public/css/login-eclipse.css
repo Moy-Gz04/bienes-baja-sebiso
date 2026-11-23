@@ -396,3 +396,19 @@ html:has(.login-eclipse), body:has(.login-eclipse) { margin: 0; padding: 0; min-
     0 0 0 1px rgba(188, 149, 92, .55),
     0 8px 18px rgba(60, 10, 25, .35);
 }
+
+/* Celular: alto real de pantalla (sin barra del navegador) y tarjeta compacta para que no se desplace */
+.login-eclipse, .login-eclipse .login-wrap { min-height: 100dvh; }
+html:has(.login-eclipse), body:has(.login-eclipse) { overscroll-behavior: none; }
+@media (max-width: 600px) {
+  .login-eclipse .login-wrap { padding: 12px; align-items: center; }
+  .login-eclipse .login-card { padding: 22px 18px 18px; }
+  .login-eclipse .login-header .minisebiso { transform: scale(.8); margin: -8px auto -6px; }
+}
+@media (max-width: 600px) and (max-height: 720px) {
+  .login-eclipse .login-wrap { padding-top: 10px; }
+  .login-eclipse .login-card { padding: 16px 16px 14px; }
+  .login-eclipse .login-header .minisebiso { transform: scale(.65); margin: -18px auto -14px; }
+  .login-eclipse .login-titulo { font-size: 19px; }
+  .login-eclipse .login-pie { margin-top: 2px; line-height: 1.4; }
+}

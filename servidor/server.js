@@ -121,7 +121,7 @@ function sesion(req, res, next) {
     if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/[A-Za-z0-9-]+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     // rol "entrega": solo su mini sistema
-    if (req.usuario.rol === "entrega" && !(req.path === "/api/entregas" || req.path === "/api/entrega" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Entrega." });
+    if (req.usuario.rol === "entrega" && !(req.path === "/api/entregas" || req.path === "/api/entregas/recientes" || req.path === "/api/entrega" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Entrega." });
     // rol "monitor": solo ve en tiempo real las existencias confirmadas
     if (req.usuario.rol === "monitor" && !(req.path === "/api/monitor-existencias" || /^\/api\/ficha\/\d+\/(enlace|estado)$/.test(req.path))) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta el monitor de existencias." });
     if (req.usuario.rol === "resguardos" && !/^\/api\/resguardos(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Resguardos." });
@@ -256,6 +256,19 @@ app.get("/api/entregas", sesion, async (req, res) => {
     const tf = jwt.sign({ proposito: "fotos" }, SECRETO, { expiresIn: "8h" });
     res.json({ ok: true, bienes: filas.map(({ n_capturadas, ...f }) => ({ ...f, fotos: f.fotos.length ? f.fotos : Array.from({ length: n_capturadas }, (_, i) => `api/foto/${f.no_inventario}/${i + 1}?t=${tf}`), entregado: !!f.entregado_por })) });
   } catch (e) { fallo(res, e, "No se pudo cargar Entrega."); }
+});
+// Monitor en vivo (cada 3 s): solo las últimas entregas, consulta ligera
+app.get("/api/entregas/recientes", sesion, async (req, res) => {
+  if (!["entrega", "completo"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no ve Entrega." });
+  try {
+    const filas = await sql`
+      SELECT n.no_inventario, b.descripcion, n.quien,
+        to_char(n.cuando AT TIME ZONE 'America/Mexico_City', 'HH24:MI:SS') AS hora,
+        to_char(n.cuando AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD') AS fecha,
+        (SELECT count(*) FROM entregas WHERE (cuando AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date)::int AS hoy
+      FROM entregas n JOIN bienes b USING (no_inventario) ORDER BY n.cuando DESC LIMIT 8`;
+    res.json({ ok: true, hoy: filas[0]?.hoy || 0, recientes: filas.map(({ hoy, ...f }) => f) });
+  } catch (e) { fallo(res, e, "No se pudo leer el monitor."); }
 });
 app.post("/api/entrega", sesion, async (req, res) => {
   if (!["entrega", "completo"].includes(req.usuario.rol)) return res.status(403).json({ ok: false, mensaje: "Tu usuario no registra entregas." });

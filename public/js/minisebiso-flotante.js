@@ -131,7 +131,7 @@ function msJunto(c, W, H) {
 (function () {
   const quieto = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const esperar = (ms) => new Promise(r => setTimeout(r, ms));
-  const anim = (el, frames, opts) => quieto ? Promise.resolve() : el.animate(frames, Object.assign({}, opts, { duration: Math.round(opts.duration * VEL) })).finished.catch(() => {});
+  const animBase = (el, frames, opts) => quieto ? Promise.resolve() : el.animate(frames, Object.assign({}, opts, { duration: Math.round(opts.duration * VEL) })).finished.catch(() => {});
 
   function mascotaHTML() {
     return `
@@ -150,7 +150,8 @@ function msJunto(c, W, H) {
     return turno;
   }
 
-  async function preguntarAhora({ titulo = '¡Hola!', pregunta = '', detalle = '', btnOk = 'Sí, eliminar', btnCancel = 'Cancelar', iconoOk = 'ti-trash', soloOk = false, saludoOk = '¡Entendido!', textoOk = 'Lo elimino ahora mismo…', saludoCancel = '¡Va!', textoCancel = 'Lo dejamos como está.', tono = '', estiloOk = '' } = {}) {
+  async function preguntarAhora({ titulo = '¡Hola!', pregunta = '', detalle = '', btnOk = 'Sí, eliminar', btnCancel = 'Cancelar', iconoOk = 'ti-trash', soloOk = false, saludoOk = '¡Entendido!', textoOk = 'Lo elimino ahora mismo…', saludoCancel = '¡Va!', textoCancel = 'Lo dejamos como está.', tono = '', estiloOk = '', rapido = false } = {}) {
+    const anim = rapido ? () => Promise.resolve() : animBase;   // rapido: sin saltos ni vuelos, solo la pregunta
     const esquina = document.querySelector('.ms-flotante:not(.ms-oculto)');
     const overlay = document.createElement('div');
     overlay.className = 'ms-dlg-overlay';
@@ -267,7 +268,7 @@ function msJunto(c, W, H) {
         { transform: 'rotate(0deg)' }, { transform: 'rotate(-9deg)' }, { transform: 'rotate(9deg)' },
         { transform: 'rotate(-6deg)' }, { transform: 'rotate(0deg)' }
       ], { duration: 520, easing: 'ease-in-out' });
-      await esperar(quieto ? 0 : 150);
+      await esperar(quieto || rapido ? 0 : 150);
       await anim(globo, [
         { opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-30px) scale(.5)' }
       ], { duration: 260, easing: 'ease-in' });

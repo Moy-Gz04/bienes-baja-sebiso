@@ -14,7 +14,7 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
 <link rel="stylesheet" href="css/minisebiso-flotante.css">
 <link rel="stylesheet" href="css/asistente-extra.css">
 <link rel="stylesheet" href="css/personal-up.css">
-<link rel="stylesheet" href="css/entrega.css">
+<link rel="stylesheet" href="css/entrega.css?v=4">
 </head>
 <body>
 <header class="en-cab">
@@ -23,9 +23,13 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
     <button type="button" id="enSalir" class="en-btn"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</button></div>
 </header>
 <main class="en-main">
+  <section class="en-vivo" aria-live="polite">
+    <div class="en-vcab"><span class="en-punto"></span><b>Entregas en tiempo real</b><small id="enVHoy">— hoy</small><small id="enVAct" class="en-vact"></small></div>
+    <ol id="enVLista" class="en-vlista"><li class="en-vvacio">Cargando…</li></ol>
+  </section>
   <div class="en-buscar">
     <i class="bi bi-upc-scan"></i>
-    <input id="enQ" type="search" autocomplete="off" autofocus placeholder="Escanea el código o escribe No. de inventario, descripción, serie…" aria-label="Buscar bien">
+    <input id="enQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="Escanea el código o escribe No. de inventario, descripción, serie…" aria-label="Buscar bien">
   </div>
   <div id="enAviso" class="en-aviso" hidden></div>
   <nav class="en-tabs">
@@ -38,9 +42,9 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   <div class="en-mcab"><div><small id="enMInv"></small><h2 id="enMTit"></h2></div><button type="button" id="enMCerrar" class="en-x" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
   <div id="enMFotos" class="en-fotos"></div>
   <dl id="enMInfo" class="en-info"></dl>
-  <div class="en-macc"><button type="button" id="enMCancel" class="en-reg">Cancelar</button><button type="button" id="enMOk" class="en-ok"><i class="bi bi-check2-circle"></i> Entregado</button></div>
+  <div class="en-macc"><button type="button" id="enMCancel" class="en-reg">Cancelar</button><button type="button" id="enMReg" class="en-reg" hidden><i class="bi bi-arrow-counterclockwise"></i> Regresar a por entregar</button><button type="button" id="enMOk" class="en-ok"><i class="bi bi-check2-circle"></i> Entregado</button></div>
 </div></div>
-<script src="js/entrega.js"></script>
+<script src="js/entrega.js?v=4"></script>
 <script src="js/minisebiso-flotante.js"></script>
 <script src="js/asistente-extra.js"></script>
 <script src="js/asistente-ventanas.js"></script>
