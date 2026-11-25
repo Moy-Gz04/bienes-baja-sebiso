@@ -6,6 +6,7 @@ const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 // En celular/tableta no se enfoca solo el buscador: así el teclado no se abre sin que lo toquen
 const TACTIL = matchMedia("(pointer: coarse)").matches;
 const enfocar = () => { if (!TACTIL) $("enQ").focus(); };
+const YO = (() => { try { return JSON.parse(atob(localStorage.getItem("token").split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).usuario || "—"; } catch (e) { return "—"; } })();
 let BIENES = [], tab = "pend", foco = null, ocupado = false, tAviso = 0;
 
 function aviso(txt, ok) { const a = $("enAviso"); a.textContent = txt; a.className = "en-aviso" + (ok ? " ok" : ""); a.hidden = !txt; clearTimeout(tAviso); if (txt) tAviso = setTimeout(() => { a.hidden = true; }, 6000); }
@@ -44,7 +45,7 @@ async function marcar(inv, entregado) {
     const d = await r.json().catch(() => null);
     if (!d?.ok) { aviso(d?.mensaje || "No se pudo guardar. Intenta de nuevo."); return; }
     const b = BIENES.find(x => x.no_inventario === inv);
-    if (b) { b.entregado = entregado; b.entregado_por = entregado ? "tú" : null; b.entregado_en = entregado ? "ahora" : null; }
+    if (b) { b.entregado = entregado; b.entregado_por = entregado ? YO : null; b.entregado_en = entregado ? "ahora" : null; }
     foco = null; $("enQ").value = ""; pintar();
     aviso(entregado ? `Bien ${inv} marcado como entregado.` : `Bien ${inv} regresó a por entregar.`, true);
     cargar();
@@ -118,7 +119,7 @@ $("enSalir").addEventListener("click", async () => {
     : confirm("¿Cerrar sesión?");
   if (si) { localStorage.removeItem("token"); localStorage.removeItem("area"); location.href = "index.html"; }
 });
-document.addEventListener("click", (e) => { if (!e.target.closest("button,input")) enfocar(); });
+document.addEventListener("click", (e) => { if (!e.target.closest("button,input,.en-chat")) enfocar(); });
 enfocar(); cargar(); setInterval(() => { if (!ocupado && !document.hidden) cargar(); }, 30000);
 $("enQ").addEventListener("focus", () => $("enQ").select());
 
@@ -142,9 +143,57 @@ async function vivo() {
         <span class="en-vtxt"><b>${esc(x.no_inventario)}</b><small>${esc(x.descripcion || "")}</small></span>
         <span class="en-vquien">${esc(x.quien || "")}</span></li>`).join("")
       : `<li class="en-vvacio">Todavía no hay entregas.</li>`;
-    if (!primera) cargar();   // alguien entregó: refresca la lista de abajo
+    $("enVVer").hidden = d.recientes.length < 2;
+    if (!primera) {
+      cargar();   // alguien entregó: refresca la lista de abajo
+      d.recientes.filter(x => !antes.has(x.no_inventario + x.hora)).slice(0, 3).reverse().forEach(toast);
+    }
   } catch { $("enVAct").textContent = "Sin conexión, reintentando…"; $("enVAct").classList.add("err"); }
   finally { vivoOcupado = false; }
 }
+// Notificación arriba: dura 3 s y se desvanece
+function toast(x) {
+  const t = document.createElement("div"); t.className = "en-toast";
+  t.innerHTML = `<i class="bi bi-check-circle-fill"></i><div><b>Bien ${esc(x.no_inventario)} entregado</b><small>${esc(x.hora.slice(0, 5))} · ${esc(x.descripcion || "")}</small></div>`;
+  $("enToasts").appendChild(t);
+  setTimeout(() => { t.classList.add("sale"); setTimeout(() => t.remove(), 450); }, 3000);
+}
+// Ver: muestra todas las recientes o solo la última
+$("enVVer").addEventListener("click", () => {
+  const l = $("enVLista"), abierto = l.classList.toggle("solo1") === false;
+  $("enVVer").setAttribute("aria-expanded", abierto);
+  $("enVVer").innerHTML = abierto ? `<i class="bi bi-chevron-up"></i> Ocultar` : `<i class="bi bi-chevron-down"></i> Ver`;
+});
 $("enVLista").addEventListener("click", (e) => { const li = e.target.closest("li[data-inv]"); const b = li && BIENES.find(x => x.no_inventario === li.dataset.inv); if (b) abrirFicha(b); });
 vivo(); setInterval(vivo, 3000);
+
+// Bitácora: resumen por usuario (botones para filtrar) y lista de acciones con quién y cuándo
+let BIT = null, bitFiltro = "";
+$("enYo").textContent = YO;
+function pintarBit() {
+  const U = BIT.usuarios;
+  $("enBUsu").innerHTML = `<button type="button" data-u="" class="${bitFiltro ? "" : "on"}"><b>Todos</b><small>${BIT.acciones.length.toLocaleString("es-MX")} acciones</small></button>` +
+    U.map(u => `<button type="button" data-u="${esc(u.quien)}" class="${bitFiltro === u.quien ? "on" : ""}"><b>${esc(u.quien)}</b><small>${u.vigentes} entregados · ${u.hoy} hoy${u.regresos ? ` · ${u.regresos} regresos` : ""}</small></button>`).join("");
+  const L = BIT.acciones.filter(a => !bitFiltro || a.quien === bitFiltro);
+  $("enBLista").innerHTML = L.length ? L.slice(0, 500).map(a => `<li data-inv="${esc(a.no_inventario)}">
+      <span class="en-btipo ${a.accion}">${a.accion === "entrega" ? '<i class="bi bi-check2-circle"></i> Entregó' : '<i class="bi bi-arrow-counterclockwise"></i> Regresó'}</span>
+      <span class="en-vtxt"><b>${esc(a.no_inventario)}</b><small>${esc(a.descripcion || "")}${a.detalle ? " · " + esc(a.detalle) : ""}</small></span>
+      <span class="en-bq"><b>${esc(a.quien)}</b><small>${esc(a.cuando.slice(8, 10) + "/" + a.cuando.slice(5, 7) + " " + a.cuando.slice(11, 16))}</small></span></li>`).join("")
+    : `<li class="en-vvacio">Sin acciones registradas.</li>`;
+}
+async function abrirBit() {
+  $("enBModal").hidden = false; $("enBLista").innerHTML = `<li class="en-vvacio">Cargando…</li>`; $("enBUsu").innerHTML = "";
+  try {
+    const r = await fetch("/api/entregas/bitacora", { headers: H() });
+    if (r.status === 401) return sesionVencida();
+    const d = await r.json(); if (!d.ok) throw new Error(d.mensaje);
+    BIT = d; pintarBit();
+  } catch (e) { $("enBLista").innerHTML = `<li class="en-vvacio">No se pudo cargar: ${esc(e.message || "sin conexión")}.</li>`; }
+}
+const cerrarBit = () => { $("enBModal").hidden = true; enfocar(); };
+$("enBit").addEventListener("click", abrirBit);
+$("enBCerrar").addEventListener("click", cerrarBit);
+$("enBModal").addEventListener("click", (e) => { if (e.target.id === "enBModal") cerrarBit(); });
+$("enBUsu").addEventListener("click", (e) => { const b = e.target.closest("button[data-u]"); if (b) { bitFiltro = b.dataset.u; pintarBit(); } });
+$("enBLista").addEventListener("click", (e) => { const li = e.target.closest("li[data-inv]"); const b = li && BIENES.find(x => x.no_inventario === li.dataset.inv); if (b) { cerrarBit(); abrirFicha(b); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("enBModal").hidden) cerrarBit(); });

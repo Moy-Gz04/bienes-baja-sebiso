@@ -14,18 +14,20 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
 <link rel="stylesheet" href="css/minisebiso-flotante.css">
 <link rel="stylesheet" href="css/asistente-extra.css">
 <link rel="stylesheet" href="css/personal-up.css">
-<link rel="stylesheet" href="css/entrega.css?v=4">
+<link rel="stylesheet" href="css/entrega.css?v=8">
 </head>
 <body>
 <header class="en-cab">
   <div><small>SEBISO · Coordinación Administrativa</small><h1>Entrega de bienes</h1></div>
   <div class="en-cont"><span><b id="enPend">0</b> por entregar</span><span><b id="enHecho">0</b> entregados</span>
+    <span class="en-yo"><i class="bi bi-person-circle"></i> <b id="enYo"></b></span>
+    <button type="button" id="enBit" class="en-btn"><i class="bi bi-journal-text"></i> Bitácora</button>
     <button type="button" id="enSalir" class="en-btn"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</button></div>
 </header>
 <main class="en-main">
   <section class="en-vivo" aria-live="polite">
-    <div class="en-vcab"><span class="en-punto"></span><b>Entregas en tiempo real</b><small id="enVHoy">— hoy</small><small id="enVAct" class="en-vact"></small></div>
-    <ol id="enVLista" class="en-vlista"><li class="en-vvacio">Cargando…</li></ol>
+    <div class="en-vcab"><span class="en-punto"></span><b>Entregas en tiempo real</b><small id="enVHoy">— hoy</small><small id="enVAct" class="en-vact"></small><button type="button" id="enVVer" class="en-vver" aria-expanded="false"><i class="bi bi-chevron-down"></i> Ver</button></div>
+    <ol id="enVLista" class="en-vlista solo1"><li class="en-vvacio">Cargando…</li></ol>
   </section>
   <div class="en-buscar">
     <i class="bi bi-upc-scan"></i>
@@ -44,9 +46,16 @@ if(!localStorage.getItem('token') || localStorage.getItem('area') !== 'Bienes'){
   <dl id="enMInfo" class="en-info"></dl>
   <div class="en-macc"><button type="button" id="enMCancel" class="en-reg">Cancelar</button><button type="button" id="enMReg" class="en-reg" hidden><i class="bi bi-arrow-counterclockwise"></i> Regresar a por entregar</button><button type="button" id="enMOk" class="en-ok"><i class="bi bi-check2-circle"></i> Entregado</button></div>
 </div></div>
-<script src="js/entrega.js?v=4"></script>
+<div id="enBModal" class="en-modal" hidden tabindex="-1"><div class="en-caja en-bcaja" role="dialog" aria-modal="true" aria-labelledby="enBTit">
+  <div class="en-mcab"><div><small>Quién hizo cada acción</small><h2 id="enBTit">Bitácora de entregas</h2></div><button type="button" id="enBCerrar" class="en-x" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
+  <div id="enBUsu" class="en-busu"></div>
+  <ol id="enBLista" class="en-blista"></ol>
+</div></div>
+<div id="enToasts" class="en-toasts" aria-live="polite"></div>
+<script src="js/entrega.js?v=7"></script>
 <script src="js/minisebiso-flotante.js"></script>
 <script src="js/asistente-extra.js"></script>
 <script src="js/asistente-ventanas.js"></script>
+<script src="js/entrega-asistente.js?v=1"></script>
 </body>
 </html>
