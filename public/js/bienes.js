@@ -733,11 +733,9 @@ async function guardarNuevo(e) {
   if (SOLO_ALTA) {
     datos.no_inventario = (datos.no_inventario || "").toUpperCase().replace(/\s+/g, "");
     if (!datos.no_inventario) { $("bNuevoMsg").textContent = "Falta el No. de inventario."; f.no_inventario.focus(); return; }
-    if (BIENES.some(x => x.no_inventario === datos.no_inventario)) { $("bNuevoMsg").textContent = `El No. ${datos.no_inventario} ya está registrado.`; f.no_inventario.focus(); return; }
   }
   if (!datos.descripcion) { $("bNuevoMsg").textContent = "Falta la descripción."; f.descripcion.focus(); return; }
-  if (SOLO_ALTA) { if (!datos.clasificacion) { $("bNuevoMsg").textContent = "Elige el estatus."; f.clasificacion.focus(); return; } }
-  else datos.clasificacion = "Baja definitiva";
+  datos.clasificacion = "Baja definitiva";
   if (!datos.estado_fisico) { $("bNuevoMsg").textContent = "Elige el estado físico."; f.estado_fisico.focus(); return; }
   const n = nuevoFotos.filter(Boolean).length;
   if (n < 3) { const fal = nuevoFotos.map((x, i) => x ? null : TOMAS[i]).filter(Boolean); $("bNuevoMsg").textContent = `Faltan fotos: ${fal.join(", ")}. Se necesitan las 3.`; return; }

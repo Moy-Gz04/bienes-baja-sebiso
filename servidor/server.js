@@ -377,13 +377,12 @@ app.post("/api/nuevo", sesion, async (req, res) => {
     if (req.soloAlta) {
       inv = String(d.no_inventario ?? "").trim().toUpperCase().replace(/\s+/g, "");
       if (!/^[A-Z0-9-]{1,30}$/.test(inv)) return res.status(400).json({ ok: false, mensaje: "Falta el No. de inventario (solo números, letras y guion)." });
-      clas = CAMBIABLES.includes(t("clasificacion", 40)) ? t("clasificacion", 40) : null;
-      if (!clas) return res.status(400).json({ ok: false, mensaje: "Elige el estatus: Baja definitiva o Reaprovechamiento." });
-      const [ya] = await sql`SELECT 1 FROM bienes WHERE no_inventario = ${inv} UNION ALL SELECT 1 FROM bienes_nuevos WHERE no_inventario = ${inv}`;
-      if (ya) return res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya existe en el sistema.` });
+      // 2026-11-26: estatus automático (Baja definitiva) y si el No. ya existe se reescribe con lo nuevo
+      clas = CAMBIABLES.includes(t("clasificacion", 40)) ? t("clasificacion", 40) : "Baja definitiva";
     }
     const ids = bytes.length ? await subirFotosDrive(bytes) : [];
     if (!inv) { const [{ n }] = await sql`SELECT nextval('bienes_nuevos_consecutivo') AS n`; inv = "SI-" + String(n).padStart(4, "0"); }
+    if (req.soloAlta) await sql`DELETE FROM bienes_nuevos WHERE no_inventario = ${inv}`;
     await sql`INSERT INTO bienes_nuevos (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, foto_ids, quien, registro_op, clasificacion, origen)
       VALUES (${inv}, ${t("descripcion")}, ${t("marca")}, ${t("modelo")}, ${t("serie")}, ${t("material")}, ${t("color")}, ${t("ubicacion")}, ${t("unidad_presupuestal")}, ${t("adscripcion")}, ${t("estado_fisico", 40)}, ${t("caracteristicas", 1000)},
         ${ids}, ${quien}, ${opId || null}, ${clas}, ${req.soloAlta ? "alta" : "existencia"})`;
@@ -758,7 +757,8 @@ async function bajarImagen(url) {
 }
 const FRONT_PUBLICO = "https://bienes-baja-sebiso.netlify.app/";
 async function armarFicha(inv) {
-  const [b] = await sql`SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, fc.datos AS fc_datos FROM bienes b LEFT JOIN ficha_capturas fc USING (no_inventario) WHERE b.no_inventario = ${inv}`;
+  const [alta] = await sql`SELECT 1 FROM bienes_nuevos WHERE no_inventario = ${inv} AND origen = 'alta'`;
+  const [b] = alta ? [] : await sql`SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, fc.datos AS fc_datos FROM bienes b LEFT JOIN ficha_capturas fc USING (no_inventario) WHERE b.no_inventario = ${inv}`;
   if (!b) {   // Bienes sin inventario (tabla bienes_nuevos): ficha armada al momento con sus datos y sus 3 fotos de Drive
     const [n] = await sql`SELECT * FROM bienes_nuevos WHERE no_inventario = ${inv}`;
     if (!n) throw new Error("El bien no existe");
