@@ -3,6 +3,7 @@ let SOLO_CAPTURA = false;   // usuario que solo toma fotos de los bienes que no 
 const estado = { grupo: "", abierto: null, foto: 0, vista: [], limite: 100 };
 let SOLO_COMPROBAR = false; // usuario que solo marca palomita / equis en Propuesta DIF
 const GRUPOS_COMPROBAR = [["", "Todos"], ["Por comprobar", "Por comprobar"], ["Comprobado", "Comprobado"], ["No comprobado", "No comprobado"]];
+let SOLO_ALTA = false; // rol alta: registra bienes con su No. de inventario; solo ve lo que se registra ahí
 let SOLO_EXISTENCIA = false; // usuario que solo consulta y confirma la existencia física (funciona sin internet)
 const GRUPOS_EXISTENCIA = [["", "Todos"], ["Baja definitiva", "Baja definitiva"], ["Para reaprovechamiento", "Reaprovechamiento"], ["__nuevos", "Registrados"], ["__agregados", "Bienes sin inventario"]];
 const GRUPOS_CAPTURA = [["", "Todos"], ["Faltan fotos", "Faltan fotos"], ["Fotos tomadas", "Fotos tomadas"]];
@@ -102,7 +103,9 @@ async function marcarComprobado(inv, cual) {
 function pintar() {
   const lista = filtrados();
   estado.vista = lista;
-  $("bCuerpo").innerHTML = lista.slice(0, estado.limite).map(b => `<tr data-inv="${esc(b.no_inventario)}">
+  const conHora = SOLO_EXISTENCIA && estado.grupo === "__agregados";
+  if ($("bThHora")) $("bThHora").hidden = !conHora; document.body.classList.toggle("con-hora", conHora);
+  $("bCuerpo").innerHTML = lista.slice(0, estado.limite).map(b => `<tr data-inv="${esc(b.no_inventario)}"${b.posible_duplicado ? ` class="b-dup" title="Posible duplicado de ${esc(b.posible_duplicado)} (mismas fotos)"` : ""}>
       <td class="b-c">${b.fotos.length ? `<img class="b-mini" src="${b.fotos[0]}" alt="" loading="lazy">` : `<span class="b-mini b-mini-vacia"><i class="bi bi-camera"></i></span>`}</td>
       <td class="b-num">${esc(b.no_inventario)}</td>
       <td><span class="b-desc"><b>${esc(b.descripcion || "Sin descripción")}</b> ${esc([b.marca, b.modelo].filter(x => x && x !== "SIN MARCA").join(" · "))}<small>${esc(sinArea(b.unidad_presupuestal))}</small>${b.clasificacion === "Propuesta DIF" && b.propuesta_dif ? `<small class="b-area-dif">Área: ${esc(b.propuesta_dif)}</small>` : ""}${estado.grupo === "__capturar" ? `<small class="b-faltan">Falta: ${esc(faltantes(b).join(", "))}</small><button type="button" class="b-quitar" data-quitar title="Quitar de Capturar datos"><i class="bi bi-x-circle"></i> Quitar de este apartado</button>` : ""}</span></td>
@@ -111,7 +114,8 @@ function pintar() {
       <td class="b-d">${pesos(b.moi)}</td>
       <td class="b-c"><button type="button" class="p-icono b-ver" title="Ver ficha técnica" aria-label="Ver ficha técnica del ${esc(b.no_inventario)}"><i class="bi bi-file-earmark-text"></i></button></td>
       ${SOLO_CAPTURA ? "" : `<td class="b-c b-comp">${SOLO_EXISTENCIA ? botonExistencia(b) : comprobacion(b)}</td>`}
-    </tr>`).join("") + (lista.length > estado.limite ? `<tr class="b-mas"><td colspan="8" class="tv-vacio"><button type="button" class="btn" data-mas>Ver más (${(lista.length - estado.limite).toLocaleString("es-MX")} restantes)</button></td></tr>` : "") || `<tr><td colspan="8" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
+      ${conHora ? `<td class="b-c b-hora">${b.registrado_en ? `<span class="b-hora-f">${esc(horaLocal(b.registrado_en).slice(0,10))}</span><span class="b-hora-h"><i class="bi bi-clock"></i> ${esc(horaLocal(b.registrado_en).slice(11))}</span>` : "—"}</td>` : ""}
+    </tr>`).join("") + (lista.length > estado.limite ? `<tr class="b-mas"><td colspan="${conHora ? 9 : 8}" class="tv-vacio"><button type="button" class="btn" data-mas>Ver más (${(lista.length - estado.limite).toLocaleString("es-MX")} restantes)</button></td></tr>` : "") || `<tr><td colspan="${conHora ? 9 : 8}" class="tv-vacio">Ningún bien coincide con la búsqueda.</td></tr>`;
   $("bConteo").textContent = `${lista.length.toLocaleString("es-MX")} ${lista.length === 1 ? "bien" : "bienes"}`;
   const total = lista.reduce((s, b) => s + (b.moi || 0), 0);
   if (SOLO_EXISTENCIA) { const c = lista.filter(b => b.existencia).length; $("bResumen").innerHTML = `<span><b>${lista.length.toLocaleString("es-MX")}</b> bienes</span><span><b>${c.toLocaleString("es-MX")}</b> confirmados</span><span><b>${(lista.length - c).toLocaleString("es-MX")}</b> por confirmar</span>`; return; }
@@ -134,7 +138,7 @@ const valor = (b, c) => (typeof c === "function" ? c(b) : b[c]) || "";
 
 const DATOS_EXISTENCIA = [["No. inventario", "no_inventario"], ["Clave armonizada", "clave_armonizada"], ["COG", "cog"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"],
   ["Material", "material"], ["Color", "color"], ["Ubicación", (b) => b.ubicacion || b.edificio], ["M.O.I.", (b) => pesos(b.moi)], ["Fecha de adquisición", (b) => fecha(b.fecha_adquisicion)],
-  ["Estado físico", (b) => estadoDe(b)], ["Clasificación", "clasificacion_bien"], ["Existencia", (b) => b.existencia ? "Confirmada · " + b.existencia.quien + " · " + b.existencia.cuando : b.independiente ? "Bienes sin inventario" : "Por confirmar"],
+  ["Estado físico", (b) => estadoDe(b)], ["Clasificación", "clasificacion_bien"], ["Existencia", (b) => b.existencia ? "Confirmada · " + b.existencia.quien + " · " + b.existencia.cuando : b.independiente ? (SOLO_ALTA ? "Registrado" : "Bienes sin inventario") : "Por confirmar"],
   ["Unidad presupuestal", (b) => sinArea(b.unidad_presupuestal), 2], ["Adscripción", "adscripcion"], ["Folio fiscal", "folio_fiscal"],
   ["Registrado en el sistema", (b) => b.nuevo || b.independiente ? [b.registrado_por || yo(), b.registrado_en ? horaLocal(b.registrado_en) : ""].filter(Boolean).join(" · ") : "", 2]];
 const DATOS_CAPTURA = [["No. inventario", "no_inventario"], ["Marca", "marca"], ["Modelo", "modelo"], ["Serie", "serie"], ["Material", "material"], ["Color", "color"],
@@ -268,7 +272,7 @@ function verFicha(inv) {
   if (estado.abierto !== b) { captura.fotos = [null, null, null]; captura.rehacer = false; $("bCapMsg").textContent = ""; }
   estado.abierto = b; estado.foto = 0;
   $("bTitulo").textContent = b.descripcion || `Bien ${b.no_inventario}`;
-  $("bChips").innerHTML = `<span class="b-pill ${clase(clasDe(b))}">${esc(clasDe(b))}</span>${SOLO_EXISTENCIA ? `<span class="b-pill ${b.independiente ? "dif" : "reap"}">${b.independiente ? "Bienes sin inventario" : "Existencia confirmada"}</span>` : ""}<span class="b-inv">No. ${esc(b.no_inventario)}</span>`
+  $("bChips").innerHTML = `<span class="b-pill ${clase(clasDe(b))}">${esc(clasDe(b))}</span>${SOLO_EXISTENCIA ? `<span class="b-pill ${b.independiente ? "dif" : "reap"}">${b.independiente ? (SOLO_ALTA ? "Registrado" : "Bienes sin inventario") : "Existencia confirmada"}</span>` : ""}<span class="b-inv">No. ${esc(b.no_inventario)}</span>${b.posible_duplicado ? `<span class="b-pill b-pill-dup"><i class="bi bi-files"></i> Posible duplicado de ${esc(b.posible_duplicado)}</span>` : ""}`
     + (estadoDe(b) ? `<span class="b-estado e-${norm(estadoDe(b)).toLowerCase()}">${esc(estadoDe(b))}</span>` : "");
   $("bDetalle").innerHTML = fichaHTML(b);
   $("bDescargar").hidden = $("bImprimir").hidden = SOLO_CAPTURA || !b.tiene_pdf;
@@ -405,7 +409,7 @@ function imprimir() {
 document.addEventListener("DOMContentLoaded", async () => {
   $("bCuerpo").innerHTML = `<tr><td colspan="7" class="tv-vacio">Cargando bienes…</td></tr>`;
   let respuesta;
-  if (localStorage.getItem("rol") === "existencia") { respuesta = await cargarExistencia(); if (!respuesta) return; }
+  if (["existencia", "alta"].includes(localStorage.getItem("rol"))) { respuesta = await cargarExistencia(); if (!respuesta) return; }
   else {
     const r = await fetch("/api/bienes", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
     if (r.status === 401) { location.href = "index.html"; return; }
@@ -427,6 +431,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".tv-cabeza h1").textContent = "Bienes con existencia";
     document.querySelector(".b-comp-th").textContent = "Existencia";
     // 2026-11-20: consulta de los 1,073 + "Agregar bien nuevo" (lista independiente, siempre Baja definitiva)
+    if (respuesta.alta) {
+      SOLO_ALTA = true; GRUPOS = [["__agregados", "Bienes registrados"]];
+      document.body.classList.add("solo-alta");
+      document.querySelector(".tv-eyebrow").textContent = "Alta de bienes";
+      document.querySelector(".tv-cabeza h1").textContent = "Registro de bienes nuevos";
+      document.querySelector(".b-comp-th").textContent = "Registro";
+      $("bNuevo").innerHTML = `<i class="bi bi-plus-lg"></i> Registrar bien`;
+      $("bNuevoTitulo").textContent = "Registrar bien";
+      document.querySelector("#bNuevoForm .b-datos-ayuda").innerHTML = "Captura el <b>No. de inventario</b>, la descripción, el estado físico, el estatus y las 3 fotos (obligatorios). Al guardar se genera su ficha.";
+      document.querySelectorAll("#bNuevoCampos .b-solo-si").forEach(x => x.hidden = true);
+      document.querySelectorAll("#bNuevoCampos .b-solo-alta").forEach(x => { x.hidden = false; const i = x.querySelector("input,select"); i.disabled = false; i.required = true; });
+    }
     $("bNuevo").hidden = false; $("bNuevo").addEventListener("click", abrirNuevo);
     $("bNuevoForm").addEventListener("submit", guardarNuevo);
     $("bNuevoCasillas").addEventListener("change", async (e) => {
@@ -536,7 +552,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // servidor la confirmó. Si el servidor la rechaza pasa a "rechazadas" y queda visible con opción de reintentar.
 const clasDe = (b) => SOLO_EXISTENCIA ? (b.clasificacion_bien || "") : b.clasificacion;
 const abrirBD = () => new Promise((ok, mal) => {
-  const r = indexedDB.open("bienes-existencia", 1);
+  const r = indexedDB.open(localStorage.getItem("rol") === "alta" ? "bienes-alta" : "bienes-existencia", 1);
   r.onupgradeneeded = () => { const d = r.result; d.createObjectStore("cola", { keyPath: "id", autoIncrement: true }); d.createObjectStore("rechazadas", { keyPath: "id" }); d.createObjectStore("datos"); };
   r.onsuccess = () => ok(r.result); r.onerror = () => mal(r.error);
 });
@@ -651,7 +667,7 @@ async function recargarDatos() {
 }
 
 function botonExistencia(b) {
-  if (b.independiente) return `<span class="b-exist-pend" title="${esc(b.registrado_por || "")}"><i class="bi bi-plus-circle"></i> Sin inventario</span>`;
+  if (b.independiente) return `<span class="b-exist-pend" title="${esc(b.registrado_por || "")}"><i class="bi bi-plus-circle"></i> ${SOLO_ALTA ? "Registrado" : "Sin inventario"}</span>`;
   if (!b.existencia) return `<span class="b-exist-pend"><i class="bi bi-hourglass-split"></i> Por confirmar</span>`;
   return `<span class="b-exist-ok" title="${esc(b.existencia.quien)} · ${esc(b.existencia.cuando)}"><i class="bi bi-patch-check-fill"></i> Confirmado<small>${esc(b.existencia.cuando)}</small></span>`;
 }
@@ -699,13 +715,14 @@ function abrirNuevo() {
   $("bNuevoCampos").querySelectorAll("[required]").forEach(i => i.closest("label").classList.add("falta"));
   $("bNuevoMsg").textContent = ""; $("bNuevoGuardar").disabled = false;
   abrir($("bNuevoDlg"));
-  setTimeout(() => $("bNuevoForm").descripcion.focus(), 50);
+  setTimeout(() => (SOLO_ALTA ? $("bNuevoForm").no_inventario : $("bNuevoForm").descripcion).focus(), 50);
 }
 function agregarNuevoLocal(op) {
   const d = op.datos;
   if (BIENES.some(x => x.opId === op.opId)) return;
-  const b = { ...d, opId: op.opId, no_inventario: "Por asignar", moi: 0, independiente: true, registrado_por: yo(), registrado_en: op.cuando, clasificacion_bien: "Baja definitiva", fotos: (op.fotos || []).filter(Boolean),
-    existencia: null, clasificacion: "Baja definitiva", tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] };
+  const clas = d.clasificacion || "Baja definitiva";
+  const b = { ...d, opId: op.opId, no_inventario: op.no_inventario || "Por asignar", moi: 0, independiente: true, registrado_por: yo(), registrado_en: op.cuando, clasificacion_bien: clas, fotos: (op.fotos || []).filter(Boolean),
+    existencia: null, clasificacion: clas, tiene_pdf: false, puede_capturar_fotos: false, avisos: [], filas: [] };
   b.indice = norm([b.no_inventario, b.descripcion, b.marca, b.modelo, b.serie, b.adscripcion, b.unidad_presupuestal, b.ubicacion, b.material, b.color, b.caracteristicas].join(" "));
   BIENES.push(b);
 }
@@ -713,19 +730,25 @@ async function guardarNuevo(e) {
   e.preventDefault();
   const f = $("bNuevoForm"), datos = {};
   [...f.elements].forEach(el => { if (el.name && el.type !== "file") datos[el.name] = el.value.trim(); });
+  if (SOLO_ALTA) {
+    datos.no_inventario = (datos.no_inventario || "").toUpperCase().replace(/\s+/g, "");
+    if (!datos.no_inventario) { $("bNuevoMsg").textContent = "Falta el No. de inventario."; f.no_inventario.focus(); return; }
+    if (BIENES.some(x => x.no_inventario === datos.no_inventario)) { $("bNuevoMsg").textContent = `El No. ${datos.no_inventario} ya está registrado.`; f.no_inventario.focus(); return; }
+  }
   if (!datos.descripcion) { $("bNuevoMsg").textContent = "Falta la descripción."; f.descripcion.focus(); return; }
-  datos.clasificacion = "Baja definitiva";
+  if (SOLO_ALTA) { if (!datos.clasificacion) { $("bNuevoMsg").textContent = "Elige el estatus."; f.clasificacion.focus(); return; } }
+  else datos.clasificacion = "Baja definitiva";
   if (!datos.estado_fisico) { $("bNuevoMsg").textContent = "Elige el estado físico."; f.estado_fisico.focus(); return; }
   const n = nuevoFotos.filter(Boolean).length;
   if (n < 3) { const fal = nuevoFotos.map((x, i) => x ? null : TOMAS[i]).filter(Boolean); $("bNuevoMsg").textContent = `Faltan fotos: ${fal.join(", ")}. Se necesitan las 3.`; return; }
-  const M = window.MiniSEBISO, pregunta = `¿Agrego este bien sin inventario?`;
-  const detalle = `${datos.descripcion} · 3 fotos · Baja definitiva (Bienes sin inventario)`;
+  const M = window.MiniSEBISO, pregunta = SOLO_ALTA ? `¿Registro el bien ${datos.no_inventario}?` : `¿Agrego este bien sin inventario?`;
+  const detalle = SOLO_ALTA ? `${datos.descripcion} · 3 fotos · ${datos.clasificacion === "Para reaprovechamiento" ? "Reaprovechamiento" : "Baja definitiva"}` : `${datos.descripcion} · 3 fotos · Baja definitiva (Bienes sin inventario)`;
   const si = M && M.preguntar && !M.apagado
     ? await M.preguntar({ titulo: "Registrar bien", pregunta, detalle, btnOk: "Sí, registrarlo", iconoOk: "ti-plus", textoOk: "Lo registro…", estiloOk: "dorado", btnCancel: "Cancelar", saludoOk: "¡Listo!", saludoCancel: "¡Va!", textoCancel: "Sigue editando." })
     : confirm(pregunta);
   if (!si) return;
   $("bNuevoGuardar").disabled = true;
-  const op = { tipo: "nuevo", no_inventario: "Por asignar", datos, fotos: nuevoFotos.filter(Boolean), cuando: new Date().toISOString(), opId: uid() };
+  const op = { tipo: "nuevo", no_inventario: SOLO_ALTA ? datos.no_inventario : "Por asignar", datos, fotos: nuevoFotos.filter(Boolean), cuando: new Date().toISOString(), opId: uid() };
   try { await tx("cola", "readwrite", s => s.add(op)); } catch (x) { $("bNuevoMsg").textContent = "No se pudo guardar en este equipo. Intenta de nuevo."; $("bNuevoGuardar").disabled = false; return; }
   agregarNuevoLocal(op); await guardarCopia();
   cerrar($("bNuevoDlg"));

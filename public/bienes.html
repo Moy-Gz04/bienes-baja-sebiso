@@ -46,7 +46,7 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
 
   <div class="tv-tarjeta b-tarjeta">
     <div class="b-tabla" id="bContenedor"><table id="bTabla">
-      <thead><tr><th class="b-c">Foto</th><th>No. inventario</th><th>Descripción</th><th>Clasificación</th><th class="b-c">Estado</th><th class="b-d">M.O.I.</th><th class="b-c">Ficha</th><th class="b-c b-comp-th">Comprobado</th></tr></thead>
+      <thead><tr><th class="b-c">Foto</th><th>No. inventario</th><th>Descripción</th><th>Clasificación</th><th class="b-c">Estado</th><th class="b-d">M.O.I.</th><th class="b-c">Ficha</th><th class="b-c b-comp-th">Comprobado</th><th class="b-c" id="bThHora" hidden>Registrado</th></tr></thead>
       <tbody id="bCuerpo"></tbody>
     </table></div>
     <div class="b-pie">
@@ -131,7 +131,8 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
       <div class="b-pdf-cabeza"><h2 id="bNuevoTitulo">Agregar bien nuevo</h2></div>
       <p class="b-datos-ayuda">No lleva No. de inventario: el sistema le asigna un consecutivo (SI-0001, SI-0002…) que sale en la ficha. La descripción, el estado físico y las 3 fotos son obligatorios. Queda como <b>Baja definitiva</b> en Bienes sin inventario, aparte de los 1,073.</p>
       <div class="b-campos" id="bNuevoCampos">
-        <label><span>No. (consecutivo)</span><input value="Se asigna al guardar" disabled></label>
+        <label class="b-solo-si"><span>No. (consecutivo)</span><input value="Se asigna al guardar" disabled></label>
+        <label class="b-solo-alta falta" hidden><span>No. de inventario *</span><input name="no_inventario" maxlength="30" inputmode="numeric" autocomplete="off" disabled></label>
         <label class="a2 falta"><span>Descripción *</span><input name="descripcion" maxlength="300" required></label>
         <label><span>Marca</span><input name="marca" maxlength="120"></label>
         <label><span>Modelo</span><input name="modelo" maxlength="120"></label>
@@ -139,7 +140,8 @@ if(localStorage.getItem('rol') === 'resguardos'){ window.location.href = 'resgua
         <label><span>Material</span><input name="material" maxlength="120"></label>
         <label><span>Color</span><input name="color" maxlength="80"></label>
         <label class="falta"><span>Estado físico *</span><select name="estado_fisico" required><option value="">— Elige —</option><option>Bueno</option><option>Regular</option><option>Malo</option><option>Inservible</option></select></label>
-        <label><span>Estatus</span><input value="Baja definitiva" disabled></label>
+        <label class="b-solo-si"><span>Estatus</span><input value="Baja definitiva" disabled></label>
+        <label class="b-solo-alta falta" hidden><span>Estatus *</span><select name="clasificacion" disabled><option value="">— Elige —</option><option>Baja definitiva</option><option value="Para reaprovechamiento">Reaprovechamiento</option></select></label>
         <label class="a2"><span>Ubicación</span><input name="ubicacion" maxlength="300"></label>
         <label class="a2"><span>Unidad presupuestal</span><input name="unidad_presupuestal" maxlength="300"></label>
         <label><span>Adscripción</span><input name="adscripcion" maxlength="300"></label>

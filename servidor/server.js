@@ -57,7 +57,9 @@ sql`CREATE TABLE IF NOT EXISTS existencias (
 sql`CREATE TABLE IF NOT EXISTS bienes_nuevos (
   no_inventario TEXT PRIMARY KEY, descripcion TEXT, marca TEXT, modelo TEXT, serie TEXT, material TEXT, color TEXT, ubicacion TEXT, unidad_presupuestal TEXT, adscripcion TEXT,
   estado_fisico TEXT, caracteristicas TEXT, clasificacion TEXT NOT NULL DEFAULT 'Baja definitiva', foto_ids TEXT[] NOT NULL DEFAULT '{}',
-  quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), registro_op TEXT)`.then(() => sql`CREATE SEQUENCE IF NOT EXISTS bienes_nuevos_consecutivo`).catch(e => console.error("bienes_nuevos:", e.message));
+  quien TEXT NOT NULL, cuando TIMESTAMPTZ NOT NULL DEFAULT now(), registro_op TEXT)`.then(() => sql`CREATE SEQUENCE IF NOT EXISTS bienes_nuevos_consecutivo`)
+  // 2026-11-26: origen 'alta' = registrados por el rol alta con su No. de inventario real (lista aparte, no la ve existencia)
+  .then(() => sql`ALTER TABLE bienes_nuevos ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT 'existencia'`).catch(e => console.error("bienes_nuevos:", e.message));
 // Bienes sin inventario: el sistema les asigna un consecutivo SI-0001, SI-0002… (va como No. de inventario en la ficha)
 
 // Fichas escaneadas con firma: si bienes.pdf_drive_id coincide con drive_id, la ficha vigente es la firmada
@@ -104,7 +106,7 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
     intentos.delete(ip);
-    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol, ...(u.unidad ? { unidad: u.unidad } : {}) }, SECRETO, { expiresIn: u.rol === "existencia" ? "30d" : "8h" }), area: u.area, rol: u.rol });
+    res.json({ token: jwt.sign({ id: u.id, usuario: u.usuario, area: u.area, rol: u.rol, ...(u.unidad ? { unidad: u.unidad } : {}) }, SECRETO, { expiresIn: ["existencia", "alta"].includes(u.rol) ? "30d" : "8h" }), area: u.area, rol: u.rol });
   } catch (e) { fallo(res, e, "No se pudo iniciar sesión."); }
 });
 
@@ -117,7 +119,11 @@ function sesion(req, res, next) {
     req.soloMudanza = req.usuario.rol === "mudanza";       // solo entra a Inventario · Mudanza y solo de su unidad presupuestal
     if (req.soloMudanza && !/^\/api\/mudanza(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, mensaje: "Tu usuario solo tiene acceso a Inventario - Mudanza." });
     // rol "existencia": solo consulta bienes, ve su ficha y confirma su existencia (trabaja sin internet: sesión de 30 días)
-    req.soloExistencia = req.usuario.rol === "existencia";
+    // rol "alta": registra bienes nuevos con su No. de inventario; usa la misma pantalla que existencia pero solo ve lo que se registra ahí
+    req.soloAlta = req.usuario.rol === "alta";
+    if (req.soloAlta && !(req.path === "/api/bienes" || req.path === "/api/nuevo" || /^\/api\/ficha\/[A-Za-z0-9-]+\/(enlace|estado)$/.test(req.path)))
+      return res.status(403).json({ ok: false, mensaje: "Tu usuario solo registra bienes nuevos." });
+    req.soloExistencia = req.usuario.rol === "existencia" || req.soloAlta;
     if (req.soloExistencia && !(req.path === "/api/bienes" || req.path === "/api/existencia" || req.path === "/api/clasificacion" || req.path === "/api/nuevo" || req.path === "/api/monitor-existencias" || /^\/api\/ficha\/[A-Za-z0-9-]+\/(enlace|estado)$/.test(req.path)))
       return res.status(403).json({ ok: false, mensaje: "Tu usuario solo consulta bienes y confirma su existencia." });
     // rol "entrega": solo su mini sistema
@@ -132,6 +138,11 @@ function sesion(req, res, next) {
 // ── Bienes con sus fotos y el estatus capturado
 app.get("/api/bienes", sesion, async (req, res) => {
   try {
+    if (req.soloAlta) {   // solo sus registros (empieza vacío)
+      const agregados = await sql`SELECT * FROM bienes_nuevos WHERE origen = 'alta' ORDER BY cuando DESC`;
+      return res.json({ ok: true, rol: "existencia", alta: true, bienes: agregados.map(({ foto_ids, quien, cuando, registro_op, origen, ...a }) => ({ ...a, moi: 0, independiente: true, registrado_por: quien, registrado_en: new Date(cuando).toISOString(),
+        fotos: (foto_ids || []).map(id => `https://lh3.googleusercontent.com/d/${id}=w1400`), clasificacion_bien: a.clasificacion, existencia: null, tiene_pdf: true, puede_capturar_fotos: false, avisos: [], filas: [] })) });
+    }
     const filas = await sql`
       SELECT b.*, to_char(b.fecha_adquisicion, 'YYYY-MM-DD') AS fecha_adquisicion, to_char(b.revisado_en, 'YYYY-MM-DD') AS revisado_en,
         COALESCE((SELECT array_agg(COALESCE('https://lh3.googleusercontent.com/d/' || d.drive_id || '=w1400', f.ruta || '?v=20261104') ORDER BY f.orden) FROM fotos f LEFT JOIN fotos_drive d ON d.nombre = substring(f.ruta from '[^/]+$') WHERE f.no_inventario = b.no_inventario), '{}') AS fotos,
@@ -162,12 +173,12 @@ app.get("/api/bienes", sesion, async (req, res) => {
       const CAMPOS = ["no_inventario", "descripcion", "marca", "modelo", "serie", "material", "color", "ubicacion", "edificio", "unidad_presupuestal", "adscripcion", "organo_superior",
         "clave_armonizada", "cog", "moi", "fecha_adquisicion", "estado_fisico", "estado_ficha", "condicion_foto", "caracteristicas", "folio_fiscal", "propuesta_dif", "fotos", "tiene_pdf", "ficha", "clasificacion", "registrado_por"];
       // 2026-11-20: solo los 1,073 con existencia confirmada + la lista independiente de agregados
-      const agregados = await sql`SELECT * FROM bienes_nuevos ORDER BY cuando DESC`;
+      const agregados = await sql`SELECT * FROM bienes_nuevos WHERE origen = 'existencia' ORDER BY cuando DESC`;
       return res.json({ ok: true, rol: "existencia", bienes: bienes.filter(b => b.existencia).map(b => {
         const x = Object.fromEntries(CAMPOS.map(k => [k, b[k]]));
         const [quien, cuando] = b.existencia.split("|");
         return { ...x, nuevo: !!b.registrado_por, registrado_en: b.registrado_en ? new Date(b.registrado_en).toISOString() : null, clasificacion_bien: b.clasificacion, existencia: { quien, cuando }, clasificacion: b.clasificacion, puede_capturar_fotos: false, avisos: [], filas: [] };
-      }).concat(agregados.map(({ foto_ids, quien, cuando, registro_op, ...a }) => ({ ...a, moi: 0, independiente: true, registrado_por: quien, registrado_en: new Date(cuando).toISOString(),
+      }).concat(agregados.map(({ foto_ids, quien, cuando, registro_op, origen, ...a }) => ({ ...a, moi: 0, independiente: true, registrado_por: quien, registrado_en: new Date(cuando).toISOString(),
         fotos: (foto_ids || []).map(id => `https://lh3.googleusercontent.com/d/${id}=w1400`), clasificacion_bien: a.clasificacion, existencia: null, tiene_pdf: true, puede_capturar_fotos: false, avisos: [], filas: [] }))) });
     }
     if (req.soloComprobar) {
@@ -361,12 +372,21 @@ app.post("/api/nuevo", sesion, async (req, res) => {
     const bytes = fotos.map(f => { const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(f)); return m ? Buffer.from(m[1], "base64") : null; });
     if (bytes.some(x => !x || x.length < 2000 || x.length > 4 * 1024 * 1024 || x[0] !== 0xff || x[1] !== 0xd8)) return res.status(400).json({ ok: false, mensaje: "Alguna foto no es válida." });
     const quien = req.usuario.usuario || "—";
+    // rol alta: trae su No. de inventario (no debe existir ya) y elige Baja definitiva o Reaprovechamiento
+    let inv = null, clas = "Baja definitiva";
+    if (req.soloAlta) {
+      inv = String(d.no_inventario ?? "").trim().toUpperCase().replace(/\s+/g, "");
+      if (!/^[A-Z0-9-]{1,30}$/.test(inv)) return res.status(400).json({ ok: false, mensaje: "Falta el No. de inventario (solo números, letras y guion)." });
+      clas = CAMBIABLES.includes(t("clasificacion", 40)) ? t("clasificacion", 40) : null;
+      if (!clas) return res.status(400).json({ ok: false, mensaje: "Elige el estatus: Baja definitiva o Reaprovechamiento." });
+      const [ya] = await sql`SELECT 1 FROM bienes WHERE no_inventario = ${inv} UNION ALL SELECT 1 FROM bienes_nuevos WHERE no_inventario = ${inv}`;
+      if (ya) return res.status(409).json({ ok: false, mensaje: `El No. ${inv} ya existe en el sistema.` });
+    }
     const ids = bytes.length ? await subirFotosDrive(bytes) : [];
-    const [{ n }] = await sql`SELECT nextval('bienes_nuevos_consecutivo') AS n`;
-    const inv = "SI-" + String(n).padStart(4, "0");
-    await sql`INSERT INTO bienes_nuevos (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, foto_ids, quien, registro_op)
+    if (!inv) { const [{ n }] = await sql`SELECT nextval('bienes_nuevos_consecutivo') AS n`; inv = "SI-" + String(n).padStart(4, "0"); }
+    await sql`INSERT INTO bienes_nuevos (no_inventario, descripcion, marca, modelo, serie, material, color, ubicacion, unidad_presupuestal, adscripcion, estado_fisico, caracteristicas, foto_ids, quien, registro_op, clasificacion, origen)
       VALUES (${inv}, ${t("descripcion")}, ${t("marca")}, ${t("modelo")}, ${t("serie")}, ${t("material")}, ${t("color")}, ${t("ubicacion")}, ${t("unidad_presupuestal")}, ${t("adscripcion")}, ${t("estado_fisico", 40)}, ${t("caracteristicas", 1000)},
-        ${ids}, ${quien}, ${opId || null})`;
+        ${ids}, ${quien}, ${opId || null}, ${clas}, ${req.soloAlta ? "alta" : "existencia"})`;
     res.json({ ok: true, no_inventario: inv, fotos: ids.length });
   } catch (e) { fallo(res, e, "No se pudo registrar el bien."); }
 });
@@ -743,7 +763,8 @@ async function armarFicha(inv) {
     const [n] = await sql`SELECT * FROM bienes_nuevos WHERE no_inventario = ${inv}`;
     if (!n) throw new Error("El bien no existe");
     const fotos = await Promise.all((n.foto_ids || []).map(id => bajarImagen(urlDrive(id)).catch(e => { console.error(e.message); return null; })));
-    return { pdf: await fichaPdf({ ...n, padron: "Bienes sin inventario", estatus_contable: "M" }, fotos), fotos };
+    const alta = n.origen === "alta";   // con No. de inventario: padrón = su estatus; estatus contable Baja=M, Reaprovechamiento=B
+    return { pdf: await fichaPdf({ ...n, padron: alta ? n.clasificacion : "Bienes sin inventario", estatus_contable: alta && n.clasificacion === "Para reaprovechamiento" ? "B" : "M" }, fotos), fotos };
   }
   const bien = { ...b, ...(b.fc_datos || {}) };
   const origen = await sql`SELECT COALESCE('https://lh3.googleusercontent.com/d/' || d.drive_id || '=w1400', ${FRONT_PUBLICO} || f.ruta) AS url FROM fotos f
